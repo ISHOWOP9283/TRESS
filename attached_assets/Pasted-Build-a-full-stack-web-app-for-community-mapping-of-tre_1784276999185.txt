@@ -1,0 +1,42 @@
+Build a full-stack web app for community mapping of trees, mangroves, and trash sites, using the Google Maps JavaScript API.
+
+TECH STACK:
+- Frontend: HTML, CSS, JavaScript with Google Maps JavaScript API
+- Backend: Node.js with Express
+- Database: SQLite (simple file-based database, no separate server needed)
+
+FEATURES NEEDED:
+
+1. Frontend (map page):
+   - Full-screen interactive Google Map centered on [your area's latitude, longitude]
+   - Load the map using: <script src="https://maps.googleapis.com/maps/api/js?key=YOUR_API_KEY&callback=initMap" async defer></script>
+   - Click anywhere on the map to drop a pin at that location
+   - A form to add: category (tree planted / mangrove dying / trash pile), notes, reporter name
+   - Different colored markers per category (green/brown/red) using custom marker icons
+   - Clicking a marker shows an InfoWindow with its details
+   - A sidebar listing all entries with a delete button on each
+   - Filter checkboxes to show/hide each category
+   - A counter showing total entries per category
+   - A search box (Google Places Autocomplete) to jump to a location by name
+
+2. Backend (API):
+   - POST /api/entries — save a new marker (lat, lng, category, notes, reporter, date) to the database
+   - GET /api/entries — return all saved markers as JSON
+   - DELETE /api/entries/:id — remove a specific marker
+   - Basic input validation (reject entries with missing/invalid coordinates)
+
+3. Database:
+   - SQLite table called "entries" with columns: id, lat, lng, category, notes, reporter, date
+   - Auto-create the database file and table if they don't exist when the server starts
+
+4. Project structure:
+   - Separate folders: /public (frontend files), /server.js (backend), /database.db (auto-created)
+   - Include a package.json with all dependencies listed
+   - Store the Google Maps API key in a config variable, clearly marked so I can replace it with my own key
+   - Include a README with setup steps: how to get a Google Maps API key, how to install dependencies (npm install), and how to run the server (npm start)
+
+5. Code quality:
+   - Add comments explaining each major part, since I'm a beginner
+   - Keep code organized into clear, readable sections
+
+Give me all the files I need (server.js, package.json, public/index.html, public/style.css, public/script.js) with complete code, ready to run locally after I add my own Google Maps API key.
