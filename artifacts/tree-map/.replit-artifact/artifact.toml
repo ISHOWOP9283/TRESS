@@ -1,0 +1,27 @@
+kind = "web"
+previewPath = "/"
+title = "Community Tree Map"
+version = "1.0.0"
+id = "artifacts/tree-map"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 19071
+
+[services.development]
+run = "pnpm --filter @workspace/tree-map run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/tree-map", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/tree-map/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "19071"
+BASE_PATH = "/"
