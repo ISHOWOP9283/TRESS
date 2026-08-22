@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:pivotX="54"
+        android:pivotY="54"
+        android:scaleX="0.65"
+        android:scaleY="0.65"
+        android:translateX="18.9"
+        android:translateY="18.9">
+        <!-- White Map Pin Housing -->
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M54,18 C38,18 25,31 25,47 C25,67 54,94 54,94 C54,94 83,67 83,47 C83,31 70,18 54,18 Z" />
+        <!-- Pin Inner Shadow/Ring -->
+        <path
+            android:fillColor="#E2F2EC"
+            android:pathData="M54,23 C41,23 30,34 30,47 C30,62 54,85 54,85 C54,85 78,62 78,47 C78,34 67,23 54,23 Z" />
+        <!-- Central Mangrove Leaf (Upright) -->
+        <path
+            android:fillColor="#1B5E20"
+            android:pathData="M54,26 C54,26 60,37 54,49 C48,37 54,26 54,26 Z" />
+        <!-- Left Mangrove Leaf -->
+        <path
+            android:fillColor="#388E3C"
+            android:pathData="M52,38 C52,38 41,36 40,48 C48,50 52,38 52,38 Z" />
+        <!-- Right Mangrove Leaf -->
+        <path
+            android:fillColor="#4CAF50"
+            android:pathData="M56,38 C56,38 67,36 68,48 C60,50 56,38 56,38 Z" />
+        <!-- Stem and Pin Hole -->
+        <path
+            android:fillColor="#1B5E20"
+            android:pathData="M52,48 L56,48 L55,59 L53,59 Z" />
+        <!-- Bottom Point Node -->
+        <path
+            android:fillColor="#2E7D32"
+            android:pathData="M54,58 C51.8,58 50,59.8 50,62 C50,64.2 51.8,66 54,66 C56.2,66 58,64.2 58,62 C58,59.8 56.2,58 54,58 Z" />
+    </group>
+</vector>
+

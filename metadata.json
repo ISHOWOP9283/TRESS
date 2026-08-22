@@ -1,0 +1,7 @@
+{
+  "name": "Community Mapper",
+  "description": "Community-Mapper: Mangrove Monitoring app for tracking mangrove ecosystem health, zone sectors, field observations, and canopy cover trends.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
