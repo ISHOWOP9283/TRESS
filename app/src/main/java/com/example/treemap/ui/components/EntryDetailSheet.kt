@@ -226,7 +226,7 @@ fun EntryDetailSheet(
                         .padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    // Location coordinates
+                    // Location coordinates & Co-Location
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
                             imageVector = Icons.Default.LocationOn,
@@ -237,12 +237,12 @@ fun EntryDetailSheet(
                         Spacer(modifier = Modifier.width(10.dp))
                         Column {
                             Text(
-                                text = "GPS Coordinates & Zone",
+                                text = "Co-Location & GPS Coordinates",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Text(
-                                text = "%.5f, %.5f · %s".format(entry.lat, entry.lng, entry.zoneId.replace("_", " ").uppercase()),
+                                text = "${entry.title} • %.5f, %.5f (%s)".format(entry.lat, entry.lng, entry.zoneId.replace("_", " ").uppercase()),
                                 style = MaterialTheme.typography.bodyMedium.copy(
                                     fontWeight = FontWeight.Medium
                                 ),
@@ -253,7 +253,7 @@ fun EntryDetailSheet(
 
                     HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
 
-                    // Dominant Species
+                    // Issue Classification
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
                             imageVector = Icons.Default.Park,
@@ -264,7 +264,7 @@ fun EntryDetailSheet(
                         Spacer(modifier = Modifier.width(10.dp))
                         Column {
                             Text(
-                                text = "Flora / Species Classification",
+                                text = "Issue / Health Classification",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -291,7 +291,7 @@ fun EntryDetailSheet(
                         Spacer(modifier = Modifier.width(10.dp))
                         Column {
                             Text(
-                                text = "Logged Date",
+                                text = "Reported Date & Time",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -318,27 +318,27 @@ fun EntryDetailSheet(
                         Spacer(modifier = Modifier.width(10.dp))
                         Column {
                             Text(
-                                text = "Field Observer",
+                                text = "Reported By (User / Officer)",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Text(
                                 text = entry.reporter,
                                 style = MaterialTheme.typography.bodyMedium.copy(
-                                    fontWeight = FontWeight.Medium
+                                    fontWeight = FontWeight.Bold
                                 ),
-                                color = MaterialTheme.colorScheme.onSurface
+                                color = MangroveTealPrimary
                             )
                         }
                     }
                 }
             }
 
-            // Notes Section
+            // Notes / Issue Comments Section
             if (!entry.notes.isNullOrBlank()) {
                 Spacer(modifier = Modifier.height(14.dp))
                 Text(
-                    text = "FIELD OBSERVATION NOTES",
+                    text = "ISSUE DETAILS & COMMENTS",
                     style = MaterialTheme.typography.labelMedium.copy(
                         fontWeight = FontWeight.Bold,
                         letterSpacing = 0.8.sp

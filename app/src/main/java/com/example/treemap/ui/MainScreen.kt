@@ -17,36 +17,33 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AddLocation
 import androidx.compose.material.icons.filled.AdminPanelSettings
+import androidx.compose.material.icons.filled.Analytics
 import androidx.compose.material.icons.filled.Assessment
 import androidx.compose.material.icons.filled.ExitToApp
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Key
-import androidx.compose.material.icons.filled.ListAlt
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Public
+import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.SupervisorAccount
 import androidx.compose.material.icons.filled.VpnKey
 import androidx.compose.material.icons.outlined.AdminPanelSettings
-import androidx.compose.material.icons.outlined.Assessment
-import androidx.compose.material.icons.outlined.ListAlt
+import androidx.compose.material.icons.outlined.Analytics
 import androidx.compose.material.icons.outlined.Map
+import androidx.compose.material.icons.outlined.Place
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DrawerValue
-import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
@@ -61,7 +58,6 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -87,36 +83,32 @@ import com.example.treemap.ui.auth.LoginScreen
 import com.example.treemap.ui.components.AddEntryDialog
 import com.example.treemap.ui.components.EntryDetailSheet
 import com.example.treemap.ui.components.InteractiveMapView
-import com.example.treemap.ui.components.JournalListView
-import com.example.treemap.ui.components.MangroveStatusLegend
-import com.example.treemap.ui.components.ReportsDetailSheet
-import com.example.treemap.ui.components.SectorOverviewCard
-import com.example.treemap.ui.components.StatsOverview
 import com.example.treemap.ui.components.TopMangroveAppBar
+import com.example.treemap.ui.components.UserAnalysisScreen
+import com.example.treemap.ui.components.UserPlacesImpactScreen
 import com.example.treemap.ui.theme.MangroveDeepTeal
 import com.example.treemap.ui.theme.MangroveTealPrimary
 import com.example.treemap.util.LocationHelper
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(
     viewModel: MainViewModel,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val entries by viewModel.entries.collectAsStateWithLifecycle()
     val stats by viewModel.stats.collectAsStateWithLifecycle()
-    val currentUser by viewModel.currentUser.collectAsStateWithLifecycle()
     val allUsers by viewModel.allUsers.collectAsStateWithLifecycle()
+    val currentUser by viewModel.currentUser.collectAsStateWithLifecycle()
 
-    val snackbarHostState = remember { SnackbarHostState() }
-    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val coroutineScope = rememberCoroutineScope()
-    val context = LocalContext.current
+    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    val snackbarHostState = remember { SnackbarHostState() }
+
     var showApiKeyInfoDialog by remember { mutableStateOf(false) }
 
-    // Live GPS Location Permission Launcher
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
@@ -138,7 +130,7 @@ fun MainScreen(
             )
         } else {
             coroutineScope.launch {
-                snackbarHostState.showSnackbar("Location permission required to pinpoint your live location.")
+                snackbarHostState.showSnackbar("Location permission required for live GPS sync.")
             }
         }
     }
@@ -184,9 +176,6 @@ fun MainScreen(
             onLogin = { emailOrUser, pass ->
                 viewModel.login(emailOrUser, pass)
             },
-            onDirectEmailAccess = { email ->
-                viewModel.directEmailAccess(email)
-            },
             errorMessage = uiState.loginErrorMessage
         )
         return
@@ -196,6 +185,7 @@ fun MainScreen(
 
     ModalNavigationDrawer(
         drawerState = drawerState,
+        gesturesEnabled = drawerState.isOpen,
         drawerContent = {
             ModalDrawerSheet(
                 drawerContainerColor = MaterialTheme.colorScheme.surface,
@@ -206,26 +196,35 @@ fun MainScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .background(MangroveDeepTeal)
-                        .padding(horizontal = 20.dp, vertical = 24.dp)
+                        .padding(horizontal = 20.dp, vertical = 20.dp)
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween,
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(48.dp)
-                                .clip(CircleShape)
-                                .background(Color.White.copy(alpha = 0.2f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = if (user.isAdmin) Icons.Default.AdminPanelSettings else Icons.Default.Person,
-                                contentDescription = null,
-                                tint = Color.White,
-                                modifier = Modifier.size(26.dp)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            com.example.treemap.ui.components.MapTreeLogoBadge(
+                                size = 42.dp,
+                                showText = false
                             )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    text = "MapTree",
+                                    style = MaterialTheme.typography.titleMedium.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White
+                                    )
+                                )
+                                Text(
+                                    text = "Project Tomorrow",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        color = Color(0xFFA7F3D0),
+                                        fontSize = 10.sp
+                                    )
+                                )
+                            }
                         }
 
                         Surface(
@@ -243,10 +242,10 @@ fun MainScreen(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(14.dp))
                     Text(
                         text = user.displayName,
-                        style = MaterialTheme.typography.titleMedium.copy(
+                        style = MaterialTheme.typography.titleSmall.copy(
                             fontWeight = FontWeight.Bold,
                             color = Color.White
                         )
@@ -285,45 +284,102 @@ fun MainScreen(
                     )
                 }
 
-                Text(
-                    text = "MONITORING SECTORS",
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.sp
-                    ),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                NavigationDrawerItem(
+                    icon = {
+                        Icon(
+                            imageVector = Icons.Default.Map,
+                            contentDescription = null,
+                            tint = MangroveTealPrimary
+                        )
+                    },
+                    label = { Text("Map View") },
+                    selected = uiState.currentTab == AppTab.MAP,
+                    onClick = {
+                        viewModel.setTab(AppTab.MAP)
+                        coroutineScope.launch { drawerState.close() }
+                    },
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp)
                 )
 
-                viewModel.zones.forEach { zone ->
-                    val isSelected = uiState.selectedZone.id == zone.id && uiState.currentTab == AppTab.MAP
-                    NavigationDrawerItem(
-                        icon = {
-                            Box(
-                                modifier = Modifier
-                                    .size(12.dp)
-                                    .clip(CircleShape)
-                                    .background(zone.strokeColor)
-                            )
-                        },
-                        label = {
-                            Text(
-                                text = zone.name,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                            )
-                        },
-                        selected = isSelected,
-                        onClick = {
-                            viewModel.setTab(AppTab.MAP)
-                            viewModel.selectZone(zone)
-                            coroutineScope.launch { drawerState.close() }
-                        },
-                        colors = NavigationDrawerItemDefaults.colors(
-                            selectedContainerColor = MangroveTealPrimary.copy(alpha = 0.12f),
-                            selectedTextColor = MangroveTealPrimary
+                NavigationDrawerItem(
+                    icon = {
+                        Icon(
+                            imageVector = Icons.Default.Analytics,
+                            contentDescription = null,
+                            tint = MangroveTealPrimary
+                        )
+                    },
+                    label = { Text("My Analysis & Accuracy") },
+                    selected = uiState.currentTab == AppTab.ANALYSIS,
+                    onClick = {
+                        viewModel.setTab(AppTab.ANALYSIS)
+                        coroutineScope.launch { drawerState.close() }
+                    },
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp)
+                )
+
+                NavigationDrawerItem(
+                    icon = {
+                        Icon(
+                            imageVector = Icons.Default.Place,
+                            contentDescription = null,
+                            tint = MangroveTealPrimary
+                        )
+                    },
+                    label = { Text("My Uploaded Places") },
+                    selected = uiState.currentTab == AppTab.MY_PLACES,
+                    onClick = {
+                        viewModel.setTab(AppTab.MY_PLACES)
+                        coroutineScope.launch { drawerState.close() }
+                    },
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp)
+                )
+
+                // Only show monitoring sectors to Admin users
+                if (user.isAdmin) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "MONITORING SECTORS",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.sp
                         ),
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
                     )
+
+                    viewModel.zones.forEach { zone ->
+                        val isSelected = uiState.selectedZone.id == zone.id && uiState.currentTab == AppTab.MAP
+                        NavigationDrawerItem(
+                            icon = {
+                                Box(
+                                    modifier = Modifier
+                                        .size(10.dp)
+                                        .clip(CircleShape)
+                                        .background(zone.strokeColor)
+                                )
+                            },
+                            label = {
+                                Text(
+                                    text = zone.name,
+                                    style = MaterialTheme.typography.bodySmall.copy(
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                    )
+                                )
+                            },
+                            selected = isSelected,
+                            onClick = {
+                                viewModel.setTab(AppTab.MAP)
+                                viewModel.selectZone(zone)
+                                coroutineScope.launch { drawerState.close() }
+                            },
+                            colors = NavigationDrawerItemDefaults.colors(
+                                selectedContainerColor = MangroveTealPrimary.copy(alpha = 0.12f),
+                                selectedTextColor = MangroveTealPrimary
+                            ),
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 1.dp)
+                        )
+                    }
                 }
 
                 HorizontalDivider(
@@ -364,28 +420,57 @@ fun MainScreen(
                     },
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
                 )
+
+                Spacer(modifier = Modifier.weight(1f))
+
+                // Bottom Brand Footer
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    com.example.treemap.ui.components.MapTreeLogoBadge(
+                        size = 32.dp,
+                        showText = false
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column {
+                        Text(
+                            text = "MapTree v2.4",
+                            style = MaterialTheme.typography.labelMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        )
+                        Text(
+                            text = "Project Tomorrow",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 10.sp
+                            )
+                        )
+                    }
+                }
             }
         }
     ) {
         Scaffold(
             snackbarHost = { SnackbarHost(snackbarHostState) },
             topBar = {
-                TopMangroveAppBar(
-                    searchQuery = uiState.searchQuery,
-                    onSearchQueryChange = { viewModel.setSearchQuery(it) },
-                    onMenuClick = {
-                        coroutineScope.launch {
-                            if (drawerState.isClosed) drawerState.open() else drawerState.close()
-                        }
-                    },
-                    onProfileClick = {
-                        if (user.isAdmin) {
-                            viewModel.setTab(AppTab.ADMIN_PANEL)
-                        } else {
+                if (uiState.currentTab != AppTab.MAP) {
+                    TopMangroveAppBar(
+                        searchQuery = uiState.searchQuery,
+                        onSearchQueryChange = { viewModel.setSearchQuery(it) },
+                        onProfileClick = {
                             coroutineScope.launch { drawerState.open() }
-                        }
-                    }
-                )
+                        },
+                        onSearchSubmit = { viewModel.searchAndNavigate(context, it) },
+                        onSelectPlaceResult = { viewModel.selectPlaceSearchResult(it) },
+                        activeCategory = uiState.selectedCategory,
+                        onCategorySelected = { viewModel.setCategoryFilter(it) }
+                    )
+                }
             },
             bottomBar = {
                 NavigationBar(
@@ -393,6 +478,7 @@ fun MainScreen(
                     tonalElevation = 8.dp,
                     modifier = Modifier.navigationBarsPadding()
                 ) {
+                    // Tab 1: Map View
                     NavigationBarItem(
                         selected = uiState.currentTab == AppTab.MAP,
                         onClick = { viewModel.setTab(AppTab.MAP) },
@@ -411,42 +497,45 @@ fun MainScreen(
                         modifier = Modifier.testTag("nav_tab_map")
                     )
 
+                    // Tab 2: User Analysis (Replaces Field Journey)
                     NavigationBarItem(
-                        selected = uiState.currentTab == AppTab.JOURNAL,
-                        onClick = { viewModel.setTab(AppTab.JOURNAL) },
+                        selected = uiState.currentTab == AppTab.ANALYSIS,
+                        onClick = { viewModel.setTab(AppTab.ANALYSIS) },
                         icon = {
                             Icon(
-                                imageVector = if (uiState.currentTab == AppTab.JOURNAL) Icons.Filled.ListAlt else Icons.Outlined.ListAlt,
-                                contentDescription = "Journal"
+                                imageVector = if (uiState.currentTab == AppTab.ANALYSIS) Icons.Filled.Analytics else Icons.Outlined.Analytics,
+                                contentDescription = "Analysis"
                             )
                         },
-                        label = { Text("Field Journal") },
+                        label = { Text("Analysis") },
                         colors = NavigationBarItemDefaults.colors(
                             selectedIconColor = MangroveTealPrimary,
                             selectedTextColor = MangroveTealPrimary,
                             indicatorColor = MangroveTealPrimary.copy(alpha = 0.12f)
                         ),
-                        modifier = Modifier.testTag("nav_tab_journal")
+                        modifier = Modifier.testTag("nav_tab_analysis")
                     )
 
+                    // Tab 3: User's Uploaded Places & Impact (Shows user's places data)
                     NavigationBarItem(
-                        selected = uiState.currentTab == AppTab.COMMUNITY_STATS,
-                        onClick = { viewModel.setTab(AppTab.COMMUNITY_STATS) },
+                        selected = uiState.currentTab == AppTab.MY_PLACES,
+                        onClick = { viewModel.setTab(AppTab.MY_PLACES) },
                         icon = {
                             Icon(
-                                imageVector = if (uiState.currentTab == AppTab.COMMUNITY_STATS) Icons.Filled.Assessment else Icons.Outlined.Assessment,
-                                contentDescription = "Analytics"
+                                imageVector = if (uiState.currentTab == AppTab.MY_PLACES) Icons.Filled.Place else Icons.Outlined.Place,
+                                contentDescription = "Places"
                             )
                         },
-                        label = { Text("Impact & Stats") },
+                        label = { Text("Impact & Status") },
                         colors = NavigationBarItemDefaults.colors(
                             selectedIconColor = MangroveTealPrimary,
                             selectedTextColor = MangroveTealPrimary,
                             indicatorColor = MangroveTealPrimary.copy(alpha = 0.12f)
                         ),
-                        modifier = Modifier.testTag("nav_tab_stats")
+                        modifier = Modifier.testTag("nav_tab_places")
                     )
 
+                    // Tab 4: Admin Panel (Only for Admin users)
                     if (user.isAdmin) {
                         NavigationBarItem(
                             selected = uiState.currentTab == AppTab.ADMIN_PANEL,
@@ -457,7 +546,7 @@ fun MainScreen(
                                     contentDescription = "Admin"
                                 )
                             },
-                            label = { Text("Admin Panel") },
+                            label = { Text("Admin") },
                             colors = NavigationBarItemDefaults.colors(
                                 selectedIconColor = MangroveTealPrimary,
                                 selectedTextColor = MangroveTealPrimary,
@@ -473,14 +562,28 @@ fun MainScreen(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(innerPadding)
+                    .padding(if (uiState.currentTab == AppTab.MAP) androidx.compose.foundation.layout.PaddingValues(0.dp) else innerPadding)
             ) {
                 when (uiState.currentTab) {
                     AppTab.MAP -> {
+                        val filteredMapEntries = remember(entries, uiState.searchQuery) {
+                            if (uiState.searchQuery.isBlank()) {
+                                entries
+                            } else {
+                                val query = uiState.searchQuery.trim().lowercase()
+                                entries.filter {
+                                    it.title.lowercase().contains(query) ||
+                                    it.species.lowercase().contains(query) ||
+                                    (it.notes?.lowercase()?.contains(query) == true) ||
+                                    it.zoneId.lowercase().contains(query)
+                                }
+                            }
+                        }
+
                         Box(modifier = Modifier.fillMaxSize()) {
-                            // 1. Interactive Map View
+                            // 1. Google Maps Fullscreen Clean Interactive Map View (No swipe down card)
                             InteractiveMapView(
-                                entries = entries,
+                                entries = filteredMapEntries,
                                 zones = viewModel.zones,
                                 activeZone = uiState.selectedZone,
                                 activeCategory = uiState.selectedCategory,
@@ -497,52 +600,71 @@ fun MainScreen(
                                 onRecenter = { viewModel.recenter() },
                                 onRequestLiveLocation = { requestLiveLocation() },
                                 onPan = { dLat, dLng -> viewModel.pan(dLat, dLng) },
+                                onMapMoved = { lat, lng, zoom -> viewModel.updateMapCenter(lat, lng, zoom) },
+                                onZoomIn = { viewModel.zoomIn() },
+                                onZoomOut = { viewModel.zoomOut() },
+                                onZoomDelta = { viewModel.adjustZoom(it) },
                                 modifier = Modifier.fillMaxSize()
                             )
 
-                            // 2. Floating Mangrove Status Legend (adapts position when card collapses/expands)
-                            MangroveStatusLegend(
+                            // 2. Floating Google Maps Search Pill (with Profile button, no separate menu button)
+                            TopMangroveAppBar(
+                                searchQuery = uiState.searchQuery,
+                                onSearchQueryChange = { viewModel.setSearchQuery(it) },
+                                onProfileClick = {
+                                    coroutineScope.launch { drawerState.open() }
+                                },
+                                onSearchSubmit = { viewModel.searchAndNavigate(context, it) },
+                                onSelectPlaceResult = { viewModel.selectPlaceSearchResult(it) },
                                 activeCategory = uiState.selectedCategory,
-                                onCategoryClick = { viewModel.setCategoryFilter(it) },
-                                modifier = Modifier
-                                    .align(Alignment.BottomEnd)
-                                    .padding(
-                                        end = 12.dp,
-                                        bottom = if (uiState.isSectorOverviewCollapsed) 80.dp else 260.dp
-                                    )
+                                onCategorySelected = { viewModel.setCategoryFilter(it) },
+                                modifier = Modifier.align(Alignment.TopCenter)
                             )
 
-                            // 3. Bottom Overview Card (Collapsible & Draggable)
-                            SectorOverviewCard(
-                                zone = uiState.selectedZone,
-                                isCollapsed = uiState.isSectorOverviewCollapsed,
-                                onToggleCollapse = { viewModel.toggleSectorOverviewCollapsed() },
-                                onLogObservation = { viewModel.openAddDialogAtCurrentCenter() },
-                                onViewDetails = { viewModel.openReportsDialog() },
-                                modifier = Modifier.align(Alignment.BottomCenter)
+                            // 3. Floating Quick Action Button for Logging Observations directly on full map
+                            ExtendedFloatingActionButton(
+                                onClick = { viewModel.openAddDialogAtCurrentCenter() },
+                                icon = {
+                                    Icon(
+                                        imageVector = Icons.Default.AddLocation,
+                                        contentDescription = "Report Place"
+                                    )
+                                },
+                                text = { Text("Report Issue", fontWeight = FontWeight.Bold) },
+                                containerColor = MangroveTealPrimary,
+                                contentColor = Color.White,
+                                modifier = Modifier
+                                    .align(Alignment.BottomEnd)
+                                    .padding(end = 16.dp, bottom = innerPadding.calculateBottomPadding() + 16.dp)
+                                    .testTag("fab_report_issue_button")
                             )
                         }
                     }
 
-                    AppTab.JOURNAL -> {
-                        JournalListView(
-                            entries = entries,
-                            activeCategory = uiState.selectedCategory,
-                            onSelectEntry = { entry -> viewModel.focusOnEntry(entry) },
-                            onDeleteEntry = { id -> viewModel.deleteEntry(id) },
+                    AppTab.ANALYSIS -> {
+                        UserAnalysisScreen(
+                            currentUser = user,
+                            allEntries = entries,
+                            onReportNewClick = {
+                                viewModel.setTab(AppTab.MAP)
+                                viewModel.openAddDialogAtCurrentCenter()
+                            },
+                            onViewMyPlacesClick = {
+                                viewModel.setTab(AppTab.MY_PLACES)
+                            },
                             modifier = Modifier.fillMaxSize()
                         )
                     }
 
-                    AppTab.COMMUNITY_STATS -> {
-                        AnalyticsDashboardView(
-                            stats = stats,
-                            zones = viewModel.zones,
-                            activeCategory = uiState.selectedCategory,
-                            onCategoryClick = { viewModel.setCategoryFilter(it) },
-                            onSelectZone = { zone ->
-                                viewModel.selectZone(zone)
+                    AppTab.MY_PLACES -> {
+                        UserPlacesImpactScreen(
+                            currentUser = user,
+                            allEntries = entries,
+                            onSelectEntry = { entry -> viewModel.focusOnEntry(entry) },
+                            onDeleteEntry = { id -> viewModel.deleteEntry(id) },
+                            onReportNewClick = {
                                 viewModel.setTab(AppTab.MAP)
+                                viewModel.openAddDialogAtCurrentCenter()
                             },
                             modifier = Modifier.fillMaxSize()
                         )
@@ -585,19 +707,6 @@ fun MainScreen(
             initialReporter = user.displayName,
             onDismiss = { viewModel.closeAddDialog() },
             onSave = { entry -> viewModel.saveEntry(entry) }
-        )
-    }
-
-    if (uiState.isReportsDialogOpen) {
-        val zoneEntries = entries.filter { it.zoneId == uiState.selectedZone.id }
-        ReportsDetailSheet(
-            zone = uiState.selectedZone,
-            entriesInZone = zoneEntries,
-            onDismiss = { viewModel.closeReportsDialog() },
-            onSelectEntry = { entry ->
-                viewModel.selectEntry(entry)
-                viewModel.focusOnEntry(entry)
-            }
         )
     }
 
@@ -654,125 +763,5 @@ fun MainScreen(
                 }
             }
         )
-    }
-}
-
-@Composable
-private fun AnalyticsDashboardView(
-    stats: com.example.treemap.data.model.EntryStats,
-    zones: List<MangroveZone>,
-    activeCategory: EntryCategory?,
-    onCategoryClick: (EntryCategory?) -> Unit,
-    onSelectZone: (MangroveZone) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    LazyColumn(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
-    ) {
-        item {
-            Text(
-                text = "Community Impact & Analytics",
-                style = MaterialTheme.typography.titleLarge.copy(
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 20.sp
-                ),
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Text(
-                text = "Real-time ecological indicators across coastal sectors",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-
-        item {
-            StatsOverview(
-                stats = stats,
-                activeCategory = activeCategory,
-                onCategoryClick = onCategoryClick
-            )
-        }
-
-        item {
-            Text(
-                text = "SECTOR HEALTH OVERVIEW",
-                style = MaterialTheme.typography.labelMedium.copy(
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 0.8.sp
-                ),
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-
-        items(zones) { zone ->
-            Card(
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(16.dp))
-                    .clickable { onSelectZone(zone) }
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = zone.name,
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = MangroveTealPrimary.copy(alpha = 0.12f)
-                        ) {
-                            Text(
-                                text = "${zone.totalAreaHectares} ha",
-                                style = MaterialTheme.typography.labelMedium.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    color = MangroveTealPrimary
-                                ),
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                            )
-                        }
-                    }
-
-                    Text(
-                        text = zone.description,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(
-                            text = "${zone.thrivingPercent}% Thriving",
-                            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
-                            color = com.example.treemap.ui.theme.StatusThriving
-                        )
-                        Text(
-                            text = "${zone.fairPercent}% Fair",
-                            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
-                            color = com.example.treemap.ui.theme.StatusFair
-                        )
-                        Text(
-                            text = "${zone.atRiskPercent}% At Risk",
-                            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
-                            color = com.example.treemap.ui.theme.StatusAtRisk
-                        )
-                    }
-                }
-            }
-        }
     }
 }

@@ -60,7 +60,6 @@ fun SectorOverviewCard(
     isCollapsed: Boolean,
     onToggleCollapse: () -> Unit,
     onLogObservation: () -> Unit,
-    onViewDetails: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Surface(
@@ -345,36 +344,6 @@ fun SectorOverviewCard(
                             text = "Log Field Observation",
                             style = MaterialTheme.typography.titleMedium.copy(
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 14.sp
-                            )
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    // Action 2: View Details & Reports (Outlined Teal Button)
-                    OutlinedButton(
-                        onClick = onViewDetails,
-                        shape = RoundedCornerShape(12.dp),
-                        border = BorderStroke(1.5.dp, MangroveTealPrimary),
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = MangroveTealPrimary
-                        ),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(46.dp)
-                            .testTag("view_details_button")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Assessment,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "View Details & Reports",
-                            style = MaterialTheme.typography.titleMedium.copy(
-                                fontWeight = FontWeight.SemiBold,
                                 fontSize = 14.sp
                             )
                         )

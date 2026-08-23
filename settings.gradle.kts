@@ -19,5 +19,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Community Mapper"
+rootProject.name = "MapTree"
 include(":app")

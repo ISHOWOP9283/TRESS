@@ -84,14 +84,12 @@ class UserRepository(
                 }
             }
 
-            // Restore last logged in user if available
-            val lastUserEmail = prefs.getString("last_logged_in_email", "admin")
+            // Restore last logged in user if previously saved
+            val lastUserEmail = prefs.getString("last_logged_in_email", null)
             if (lastUserEmail != null) {
                 val user = userDao.getUserByEmailOrUsername(lastUserEmail)
                 if (user != null && user.isActive) {
                     _currentUser.value = user
-                } else {
-                    _currentUser.value = userDao.getUserByEmailOrUsername("admin")
                 }
             }
         } catch (e: Exception) {

@@ -1,6 +1,6 @@
 {
-  "name": "Community Mapper",
-  "description": "Community-Mapper: Mangrove Monitoring app for tracking mangrove ecosystem health, zone sectors, field observations, and canopy cover trends.",
+  "name": "MapTree",
+  "description": "MapTree: Project Tomorrow. Community tree and mangrove mapping platform for tracking forest health, zone sectors, and field observations.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

@@ -21,13 +21,10 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -43,35 +40,24 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-
-data class QuickLocation(
-    val name: String,
-    val lat: Double,
-    val lng: Double,
-    val tag: String
-)
-
-val POPULAR_LOCATIONS = listOf(
-    QuickLocation("San Francisco Bay", 37.7749, -122.4194, "Coast & Parks"),
-    QuickLocation("Central Park, NY", 40.785091, -73.968285, "Urban Canopy"),
-    QuickLocation("Sundarbans Mangroves", 21.9497, 89.1833, "Mangrove Delta"),
-    QuickLocation("Amazon Basin, Manaus", -3.1190, -60.0217, "Rainforest"),
-    QuickLocation("Sydney Coastal Park", -33.8688, 151.2093, "Marine Reserve"),
-    QuickLocation("London Green Belt", 51.5074, -0.1278, "Woodland")
-)
+import com.example.treemap.util.LocationHelper
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 @Composable
 fun LocationSearchBar(
     onLocationSelected: (Double, Double, String) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     var searchQuery by remember { mutableStateOf("") }
     var showSuggestions by remember { mutableStateOf(false) }
     val focusManager = LocalFocusManager.current
@@ -80,31 +66,18 @@ fun LocationSearchBar(
         val query = searchQuery.trim()
         if (query.isEmpty()) return
 
-        // Check if query is latitude, longitude format e.g. "37.77, -122.41"
-        val coordParts = query.split(",", " ").filter { it.isNotBlank() }
-        if (coordParts.size == 2) {
-            val lat = coordParts[0].toDoubleOrNull()
-            val lng = coordParts[1].toDoubleOrNull()
-            if (lat != null && lng != null && lat in -90.0..90.0 && lng in -180.0..180.0) {
-                onLocationSelected(lat, lng, "Coordinates: $lat, $lng")
-                focusManager.clearFocus()
-                showSuggestions = false
-                return
+        CoroutineScope(Dispatchers.Main).launch {
+            val result = LocationHelper.resolveLocation(context, query)
+            if (result != null) {
+                onLocationSelected(result.lat, result.lng, result.title)
+            } else {
+                val hashLat = ((query.hashCode() % 6000).toDouble() / 100.0).coerceIn(-60.0, 60.0)
+                val hashLng = (((query.hashCode() * 31) % 12000).toDouble() / 100.0).coerceIn(-120.0, 120.0)
+                onLocationSelected(hashLat, hashLng, query)
             }
+            focusManager.clearFocus()
+            showSuggestions = false
         }
-
-        // Match with known locations or simulated geocoder
-        val matched = POPULAR_LOCATIONS.find { it.name.contains(query, ignoreCase = true) }
-        if (matched != null) {
-            onLocationSelected(matched.lat, matched.lng, matched.name)
-        } else {
-            // Generate deterministic location coordinates based on hash for exploration
-            val hashLat = ((query.hashCode() % 6000).toDouble() / 100.0).coerceIn(-60.0, 60.0)
-            val hashLng = (((query.hashCode() * 31) % 12000).toDouble() / 100.0).coerceIn(-120.0, 120.0)
-            onLocationSelected(hashLat, hashLng, query)
-        }
-        focusManager.clearFocus()
-        showSuggestions = false
     }
 
     Column(
@@ -142,7 +115,7 @@ fun LocationSearchBar(
                     },
                     placeholder = {
                         Text(
-                            text = "Search area or enter lat, lng…",
+                            text = "Search area (e.g. Panvel) or lat, lng…",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -199,16 +172,16 @@ fun LocationSearchBar(
                 .padding(top = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            items(POPULAR_LOCATIONS) { loc ->
+            items(LocationHelper.POPULAR_MANGROVE_HUBS.take(6)) { loc ->
                 AssistChip(
                     onClick = {
-                        searchQuery = loc.name
-                        onLocationSelected(loc.lat, loc.lng, loc.name)
+                        searchQuery = loc.title
+                        onLocationSelected(loc.lat, loc.lng, loc.title)
                         focusManager.clearFocus()
                     },
                     label = {
                         Text(
-                            text = loc.name,
+                            text = loc.title,
                             style = MaterialTheme.typography.labelMedium
                         )
                     },

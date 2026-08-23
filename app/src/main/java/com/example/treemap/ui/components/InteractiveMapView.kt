@@ -1,73 +1,99 @@
 package com.example.treemap.ui.components
 
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Canvas
+import android.annotation.SuppressLint
+import android.content.Context
+import android.view.MotionEvent
+import android.view.ViewGroup
+import android.webkit.JavascriptInterface
+import android.webkit.WebChromeClient
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.GpsFixed
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.MyLocation
-import androidx.compose.material.icons.filled.Navigation
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.FloatingActionButtonDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.StrokeJoin
-import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.Fill
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import com.example.treemap.data.model.EntryCategory
 import com.example.treemap.data.model.MangroveZone
 import com.example.treemap.data.model.TreeEntry
 import com.example.treemap.ui.theme.MangroveTealPrimary
-import com.example.treemap.ui.theme.StatusAtRisk
-import com.example.treemap.ui.theme.StatusFair
-import com.example.treemap.ui.theme.StatusThriving
+import org.json.JSONArray
+import org.json.JSONObject
 
+enum class MapLayerType {
+    DEFAULT,
+    SATELLITE,
+    TERRAIN
+}
+
+class MapBridge(
+    private val onMarkerTap: (Long) -> Unit,
+    private val onZoneTap: (String) -> Unit,
+    private val onMapTap: (Double, Double) -> Unit,
+    private val onMapMove: (Double, Double, Float) -> Unit
+) {
+    @JavascriptInterface
+    fun onMarkerClicked(id: Long) {
+        onMarkerTap(id)
+    }
+
+    @JavascriptInterface
+    fun onZoneClicked(zoneId: String) {
+        onZoneTap(zoneId)
+    }
+
+    @JavascriptInterface
+    fun onMapClicked(lat: Double, lng: Double) {
+        onMapTap(lat, lng)
+    }
+
+    @JavascriptInterface
+    fun onMapMoved(lat: Double, lng: Double, zoom: Float) {
+        onMapMove(lat, lng, zoom)
+    }
+}
+
+@SuppressLint("SetJavaScriptEnabled", "ClickableViewAccessibility")
 @Composable
 fun InteractiveMapView(
     entries: List<TreeEntry>,
@@ -87,192 +113,291 @@ fun InteractiveMapView(
     onRecenter: () -> Unit,
     onRequestLiveLocation: () -> Unit,
     onPan: (Float, Float) -> Unit,
+    onMapMoved: (Double, Double, Float) -> Unit = { _, _, _ -> },
+    onZoomIn: () -> Unit = {},
+    onZoomOut: () -> Unit = {},
+    onZoomDelta: (Float) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    var isSatelliteMode by remember { mutableStateOf(false) }
+    var mapLayer by remember { mutableStateOf(MapLayerType.DEFAULT) }
+    var webViewRef by remember { mutableStateOf<WebView?>(null) }
+    var isMapLoaded by remember { mutableStateOf(false) }
 
     val filteredEntries = remember(entries, activeCategory) {
         if (activeCategory == null) entries else entries.filter { it.category == activeCategory.key }
     }
 
-    val textMeasurer = rememberTextMeasurer()
+    val mapBridge = remember {
+        MapBridge(
+            onMarkerTap = { id ->
+                val entry = entries.firstOrNull { it.id == id }
+                if (entry != null) onEntrySelected(entry)
+            },
+            onZoneTap = { zId ->
+                val zone = zones.firstOrNull { it.id == zId }
+                if (zone != null) onZoneSelected(zone)
+            },
+            onMapTap = { lat, lng ->
+                onMapTapped(lat, lng)
+            },
+            onMapMove = { lat, lng, zoom ->
+                onMapMoved(lat, lng, zoom)
+            }
+        )
+    }
 
-    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
-    val pulseScale by infiniteTransition.animateFloat(
-        initialValue = 1f,
-        targetValue = 1.4f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1200, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "pulseScale"
-    )
+    // Push state updates to Leaflet when markers / layer / zones change
+    LaunchedEffect(isMapLoaded, filteredEntries, temporaryPin, userLocation, mapLayer, activeZone.id) {
+        if (isMapLoaded) {
+            webViewRef?.let { wv ->
+                // Update Layer
+                val layerName = when (mapLayer) {
+                    MapLayerType.DEFAULT -> "roadmap"
+                    MapLayerType.SATELLITE -> "satellite"
+                    MapLayerType.TERRAIN -> "terrain"
+                }
+                wv.evaluateJavascript("setMapLayer('$layerName');", null)
 
-    BoxWithConstraints(
-        modifier = modifier
-            .fillMaxSize()
-            .background(if (isSatelliteMode) Color(0xFF1B2822) else Color(0xFFE2EBE2))
-    ) {
-        val widthPx = constraints.maxWidth.toFloat()
-        val heightPx = constraints.maxHeight.toFloat()
+                // Update Markers JSON
+                val markersArray = JSONArray()
+                filteredEntries.forEach { entry ->
+                    val obj = JSONObject().apply {
+                        put("id", entry.id)
+                        put("title", entry.title)
+                        put("species", entry.species)
+                        put("category", entry.category)
+                        put("color", when (entry.categoryEnum) {
+                            EntryCategory.THRIVING_GROWTH -> "#10B981"
+                            EntryCategory.FAIR_GROWTH -> "#F59E0B"
+                            EntryCategory.AT_RISK_DYING -> "#EF4444"
+                            else -> "#00897B"
+                        })
+                        put("lat", entry.lat)
+                        put("lng", entry.lng)
+                    }
+                    markersArray.put(obj)
+                }
+                wv.evaluateJavascript("updateMarkers(${markersArray});", null)
 
-        // Coordinate projection to canvas pixels
-        val scale = zoomLevel * 3800f
+                // Update Zones JSON
+                val zonesArray = JSONArray()
+                zones.forEach { z ->
+                    val zObj = JSONObject().apply {
+                        put("id", z.id)
+                        put("name", z.name)
+                        put("sectorCode", z.sectorCode)
+                        put("centerLat", z.centerLat)
+                        put("centerLng", z.centerLng)
+                        put("color", when (z.id) {
+                            "zone_a" -> "#10B981"
+                            "zone_b" -> "#F59E0B"
+                            "zone_c" -> "#EF4444"
+                            else -> "#00897B"
+                        })
+                        val coordsArray = JSONArray()
+                        z.polygonOffsets.forEach { (lat, lng) ->
+                            val pt = JSONArray().apply {
+                                put(lat)
+                                put(lng)
+                            }
+                            coordsArray.put(pt)
+                        }
+                        put("coordinates", coordsArray)
+                    }
+                    zonesArray.put(zObj)
+                }
+                wv.evaluateJavascript("updateZones(${zonesArray}, '${activeZone.id}');", null)
 
-        fun latLngToScreen(lat: Double, lng: Double): Offset {
-            val x = widthPx / 2f + ((lng - centerLng) * scale).toFloat()
-            val y = heightPx / 2f - ((lat - centerLat) * scale).toFloat()
-            return Offset(x, y)
+                // Update Temp Pin
+                if (temporaryPin != null) {
+                    wv.evaluateJavascript("setTempPin(${temporaryPin.first}, ${temporaryPin.second});", null)
+                } else {
+                    wv.evaluateJavascript("clearTempPin();", null)
+                }
+
+                // Update User GPS Location
+                if (userLocation != null) {
+                    wv.evaluateJavascript("setUserLocation(${userLocation.first}, ${userLocation.second});", null)
+                }
+            }
         }
+    }
 
-        fun screenToLatLng(x: Float, y: Float): Pair<Double, Double> {
-            val lng = centerLng + (x - widthPx / 2f) / scale
-            val lat = centerLat - (y - heightPx / 2f) / scale
-            return Pair(lat, lng)
+    // Animate map camera smoothly when centerLat or centerLng is updated (e.g. from location search like Panvel)
+    LaunchedEffect(isMapLoaded, centerLat, centerLng) {
+        if (isMapLoaded) {
+            val targetZoom = (zoomLevel * 10f).toInt().coerceIn(12, 18)
+            webViewRef?.evaluateJavascript("flyToLocation($centerLat, $centerLng, $targetZoom);", null)
         }
+    }
 
-        // Main Map Canvas
-        Canvas(
+    Box(modifier = modifier.fillMaxSize()) {
+        // 1. Full Real World Interactive Map (Leaflet with Official Google Maps tiles and gesture pass-through)
+        AndroidView(
+            factory = { ctx ->
+                WebView(ctx).apply {
+                    layoutParams = ViewGroup.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT
+                    )
+                    settings.javaScriptEnabled = true
+                    settings.domStorageEnabled = true
+                    settings.loadWithOverviewMode = true
+                    settings.useWideViewPort = true
+                    settings.databaseEnabled = true
+                    settings.setSupportZoom(true)
+                    settings.builtInZoomControls = false
+                    settings.displayZoomControls = false
+
+                    // Ensure Android does not intercept horizontal/vertical drag events from the map
+                    setOnTouchListener { v, event ->
+                        when (event.action) {
+                            MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE -> {
+                                v.parent?.requestDisallowInterceptTouchEvent(true)
+                            }
+                            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                                v.parent?.requestDisallowInterceptTouchEvent(false)
+                            }
+                        }
+                        false
+                    }
+
+                    addJavascriptInterface(mapBridge, "AndroidBridge")
+
+                    webViewClient = object : WebViewClient() {
+                        override fun onPageFinished(view: WebView?, url: String?) {
+                            super.onPageFinished(view, url)
+                            isMapLoaded = true
+                        }
+                    }
+
+                    webChromeClient = WebChromeClient()
+
+                    val htmlContent = getMapHtml(
+                        initialLat = centerLat,
+                        initialLng = centerLng,
+                        initialZoom = (zoomLevel * 10f).toInt().coerceIn(11, 19)
+                    )
+                    loadDataWithBaseURL("https://appassets.androidplatform.net/", htmlContent, "text/html", "UTF-8", null)
+                    webViewRef = this
+                }
+            },
             modifier = Modifier
                 .fillMaxSize()
                 .testTag("interactive_map_canvas")
-                .pointerInput(centerLat, centerLng, zoomLevel) {
-                    detectTransformGestures { _, pan, _, _ ->
-                        if (pan != Offset.Zero) {
-                            val dLng = -pan.x / scale
-                            val dLat = pan.y / scale
-                            onPan(dLat.toFloat(), dLng.toFloat())
-                        }
-                    }
-                }
-                .pointerInput(centerLat, centerLng, zoomLevel, filteredEntries, zones) {
-                    detectTapGestures { tapOffset ->
-                        // Check if tapped near an existing pin (within 28dp)
-                        val tapRadius = 28.dp.toPx()
-                        val hitEntry = filteredEntries.firstOrNull { entry ->
-                            val markerScreen = latLngToScreen(entry.lat, entry.lng)
-                            (tapOffset - markerScreen).getDistance() <= tapRadius
-                        }
+        )
 
-                        if (hitEntry != null) {
-                            onEntrySelected(hitEntry)
-                            return@detectTapGestures
-                        }
-
-                        // Check if tapped inside any sector zone
-                        val hitZone = zones.firstOrNull { zone ->
-                            val zoneCenter = latLngToScreen(zone.centerLat, zone.centerLng)
-                            (tapOffset - zoneCenter).getDistance() <= 60.dp.toPx()
-                        }
-
-                        if (hitZone != null) {
-                            onZoneSelected(hitZone)
-                        } else {
-                            val (lat, lng) = screenToLatLng(tapOffset.x, tapOffset.y)
-                            onMapTapped(lat, lng)
-                        }
-                    }
-                }
+        // 2. Google Maps Attribution & Live Coordinates Tag (Bottom Left)
+        Surface(
+            shape = RoundedCornerShape(8.dp),
+            color = Color.White.copy(alpha = 0.94f),
+            shadowElevation = 3.dp,
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .padding(start = 14.dp, bottom = 12.dp)
         ) {
-            // 1. Draw Estuary Waterways & Shoreline Landscape
-            drawCoastalTerrain(widthPx, heightPx, centerLat, centerLng, scale, isSatelliteMode)
-
-            // 2. Draw Zone Sector Polygons & Outlines
-            zones.forEach { zone ->
-                val polygonScreenPoints = zone.polygonOffsets.map { (lat, lng) ->
-                    latLngToScreen(lat, lng)
-                }
-
-                if (polygonScreenPoints.size >= 3) {
-                    val path = Path().apply {
-                        moveTo(polygonScreenPoints.first().x, polygonScreenPoints.first().y)
-                        for (i in 1 until polygonScreenPoints.size) {
-                            lineTo(polygonScreenPoints[i].x, polygonScreenPoints[i].y)
-                        }
-                        close()
-                    }
-
-                    // Translucent sector fill
-                    val isCurrent = zone.id == activeZone.id
-                    val alphaFill = if (isCurrent) 0.35f else 0.20f
-                    drawPath(
-                        path = path,
-                        color = zone.strokeColor.copy(alpha = alphaFill),
-                        style = Fill
+            Row(
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Google",
+                    style = TextStyle(
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF4285F4)
                     )
-
-                    // Sector stroke boundary
-                    drawPath(
-                        path = path,
-                        color = zone.strokeColor,
-                        style = Stroke(
-                            width = if (isCurrent) 3.dp.toPx() else 1.8.dp.toPx(),
-                            cap = StrokeCap.Round,
-                            join = StrokeJoin.Round
-                        )
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Box(
+                    modifier = Modifier
+                        .width(1.dp)
+                        .height(12.dp)
+                        .background(Color(0xFFD1D5DB))
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = "%.4f°, %.4f°".format(centerLat, centerLng),
+                    style = TextStyle(
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Color(0xFF374151)
                     )
-
-                    // Draw Sector Label
-                    val centerScreen = latLngToScreen(zone.centerLat, zone.centerLng)
-                    if (centerScreen.x in 0f..widthPx && centerScreen.y in 0f..heightPx) {
-                        val textResult = textMeasurer.measure(
-                            text = zone.sectorCode,
-                            style = TextStyle(
-                                color = zone.strokeColor,
-                                fontWeight = FontWeight.ExtraBold,
-                                fontSize = 11.sp
-                            )
-                        )
-                        drawText(
-                            textLayoutResult = textResult,
-                            topLeft = Offset(
-                                centerScreen.x - textResult.size.width / 2f,
-                                centerScreen.y - textResult.size.height - 22.dp.toPx()
-                            )
-                        )
-                    }
-                }
-            }
-
-            // 3. Draw Mangrove Status Pins (Green Leaf, Yellow Sprout, Red Warning)
-            filteredEntries.forEach { entry ->
-                val pos = latLngToScreen(entry.lat, entry.lng)
-                if (pos.x in -60f..(widthPx + 60f) && pos.y in -60f..(heightPx + 60f)) {
-                    drawMangroveMarker(pos, entry.categoryEnum)
-                }
-            }
-
-            // 4. Draw Live User Location Marker (Pulsing Blue GPS Dot)
-            userLocation?.let { (uLat, uLng) ->
-                val uPos = latLngToScreen(uLat, uLng)
-                if (uPos.x in -60f..(widthPx + 60f) && uPos.y in -60f..(heightPx + 60f)) {
-                    drawLiveUserLocation(uPos, pulseScale)
-                }
-            }
-
-            // 5. Draw Temporary Drop Pin
-            temporaryPin?.let { (tLat, tLng) ->
-                val tPos = latLngToScreen(tLat, tLng)
-                drawTemporaryDropPin(tPos, pulseScale)
+                )
             }
         }
 
-        // Top-Right Floating Map Controls (GPS / Live Location, Compass, Satellite Layer)
+        // 3. Floating Google Maps Control Stack (Right Side: Layers, Compass, GPS, Directional Pan & Zoom)
         Column(
             modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(top = 12.dp, end = 12.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .align(Alignment.CenterEnd)
+                .padding(end = 12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // Live GPS Location Button
+            // Layer Switcher (Roadmap, Satellite, Terrain)
+            Surface(
+                shape = CircleShape,
+                color = Color.White,
+                shadowElevation = 5.dp,
+                modifier = Modifier.size(44.dp)
+            ) {
+                IconButton(
+                    onClick = {
+                        mapLayer = when (mapLayer) {
+                            MapLayerType.DEFAULT -> MapLayerType.SATELLITE
+                            MapLayerType.SATELLITE -> MapLayerType.TERRAIN
+                            MapLayerType.TERRAIN -> MapLayerType.DEFAULT
+                        }
+                    },
+                    modifier = Modifier.fillMaxSize().testTag("map_layer_toggle_button")
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Layers,
+                        contentDescription = "Map layer",
+                        tint = MangroveTealPrimary,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+            }
+
+            // Compass / Reset North & Recenter
+            Surface(
+                shape = CircleShape,
+                color = Color.White,
+                shadowElevation = 5.dp,
+                modifier = Modifier.size(44.dp)
+            ) {
+                IconButton(
+                    onClick = {
+                        onRecenter()
+                        webViewRef?.evaluateJavascript("panToCoordinates(${activeZone.centerLat}, ${activeZone.centerLng});", null)
+                    },
+                    modifier = Modifier.fillMaxSize().testTag("compass_recenter_button")
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Explore,
+                        contentDescription = "Reset North & Recenter",
+                        tint = Color(0xFFE53935),
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            }
+
+            // Live GPS "My Location" Button
             Surface(
                 shape = CircleShape,
                 color = if (userLocation != null) MangroveTealPrimary else Color.White,
                 shadowElevation = 6.dp,
-                modifier = Modifier.size(44.dp)
+                modifier = Modifier.size(46.dp)
             ) {
                 IconButton(
-                    onClick = onRequestLiveLocation,
+                    onClick = {
+                        onRequestLiveLocation()
+                        userLocation?.let { (lat, lng) ->
+                            webViewRef?.evaluateJavascript("flyToLocation($lat, $lng, 16);", null)
+                        }
+                    },
                     modifier = Modifier.fillMaxSize().testTag("live_gps_button")
                 ) {
                     if (isFetchingLocation) {
@@ -286,360 +411,417 @@ fun InteractiveMapView(
                             imageVector = if (userLocation != null) Icons.Default.GpsFixed else Icons.Default.MyLocation,
                             contentDescription = "Fetch Live GPS Location",
                             tint = if (userLocation != null) Color.White else MangroveTealPrimary,
-                            modifier = Modifier.size(22.dp)
+                            modifier = Modifier.size(24.dp)
                         )
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.size(8.dp))
-
-            // Recenter to Default Sector Map View
+            // Quick Pan Left / Right Buttons Card
             Surface(
-                shape = CircleShape,
+                shape = RoundedCornerShape(12.dp),
                 color = Color.White,
                 shadowElevation = 5.dp,
-                modifier = Modifier.size(42.dp)
+                modifier = Modifier.width(44.dp)
             ) {
-                IconButton(
-                    onClick = onRecenter,
-                    modifier = Modifier.fillMaxSize()
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.padding(vertical = 2.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Navigation,
-                        contentDescription = "Recenter Map",
-                        tint = MangroveTealPrimary,
-                        modifier = Modifier.size(20.dp)
+                    IconButton(
+                        onClick = {
+                            webViewRef?.evaluateJavascript("panByOffset(-150, 0);", null)
+                        },
+                        modifier = Modifier.size(40.dp).testTag("pan_left_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Pan Left",
+                            tint = Color(0xFF374151),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+
+                    HorizontalDivider(
+                        modifier = Modifier.width(28.dp),
+                        thickness = 1.dp,
+                        color = Color(0xFFE5E7EB)
                     )
+
+                    IconButton(
+                        onClick = {
+                            webViewRef?.evaluateJavascript("panByOffset(150, 0);", null)
+                        },
+                        modifier = Modifier.size(40.dp).testTag("pan_right_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                            contentDescription = "Pan Right",
+                            tint = Color(0xFF374151),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
                 }
             }
 
-            Spacer(modifier = Modifier.size(8.dp))
-
-            // Satellite Layer Toggle
+            // Google Maps Style Zoom + / Zoom - Controls Card
             Surface(
-                shape = CircleShape,
-                color = if (isSatelliteMode) MangroveTealPrimary else Color.White,
+                shape = RoundedCornerShape(12.dp),
+                color = Color.White,
                 shadowElevation = 5.dp,
-                modifier = Modifier.size(42.dp)
+                modifier = Modifier.width(44.dp)
             ) {
-                IconButton(
-                    onClick = { isSatelliteMode = !isSatelliteMode },
-                    modifier = Modifier.fillMaxSize()
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.padding(vertical = 2.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Layers,
-                        contentDescription = "Toggle satellite mode",
-                        tint = if (isSatelliteMode) Color.White else MangroveTealPrimary,
-                        modifier = Modifier.size(20.dp)
+                    IconButton(
+                        onClick = {
+                            onZoomIn()
+                            webViewRef?.evaluateJavascript("map.zoomIn();", null)
+                        },
+                        modifier = Modifier.size(40.dp).testTag("zoom_in_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = "Zoom In",
+                            tint = Color(0xFF374151),
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+
+                    HorizontalDivider(
+                        modifier = Modifier.width(28.dp),
+                        thickness = 1.dp,
+                        color = Color(0xFFE5E7EB)
                     )
+
+                    IconButton(
+                        onClick = {
+                            onZoomOut()
+                            webViewRef?.evaluateJavascript("map.zoomOut();", null)
+                        },
+                        modifier = Modifier.size(40.dp).testTag("zoom_out_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Remove,
+                            contentDescription = "Zoom Out",
+                            tint = Color(0xFF374151),
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
                 }
             }
         }
     }
 }
 
-private fun DrawScope.drawLiveUserLocation(pos: Offset, pulseScale: Float) {
-    val baseRadius = 9.dp.toPx()
+// -------------------------------------------------------------
+// Leaflet Real World Map HTML & JS Template
+// -------------------------------------------------------------
 
-    // Outer radar wave pulse
-    drawCircle(
-        color = Color(0x332196F3),
-        radius = baseRadius * pulseScale * 2.8f,
-        center = pos
-    )
+private fun getMapHtml(initialLat: Double, initialLng: Double, initialZoom: Int): String {
+    return """
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        html, body, #map {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background: #e5e3df;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            touch-action: pan-x pan-y !important;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+        .leaflet-container {
+            width: 100% !important;
+            height: 100% !important;
+            cursor: grab;
+        }
+        .leaflet-container:active {
+            cursor: grabbing;
+        }
+        .leaflet-control-attribution, .leaflet-control-zoom {
+            display: none !important;
+        }
+        .custom-google-marker {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+        .custom-pin-head {
+            width: 30px;
+            height: 30px;
+            border-radius: 50% 50% 50% 0;
+            transform: rotate(-45deg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 3px 6px rgba(0,0,0,0.35);
+            border: 2px solid #ffffff;
+        }
+        .custom-pin-core {
+            width: 11px;
+            height: 11px;
+            background: #ffffff;
+            border-radius: 50%;
+            transform: rotate(45deg);
+        }
+        .custom-pin-label {
+            margin-top: 4px;
+            background: rgba(255,255,255,0.92);
+            color: #111827;
+            font-size: 10px;
+            font-weight: 700;
+            padding: 2px 6px;
+            border-radius: 4px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+            white-space: nowrap;
+            pointer-events: none;
+            border: 1px solid #e5e7eb;
+        }
+        .user-pulse-marker {
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            background: #1A73E8;
+            border: 3px solid #ffffff;
+            box-shadow: 0 0 10px rgba(26, 115, 232, 0.7);
+            position: relative;
+        }
+        .user-pulse-marker::after {
+            content: '';
+            position: absolute;
+            top: -12px;
+            left: -12px;
+            right: -12px;
+            bottom: -12px;
+            border-radius: 50%;
+            background: rgba(26, 115, 232, 0.25);
+            animation: pulse-ring 1.8s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+        }
+        @keyframes pulse-ring {
+            0% { transform: scale(0.6); opacity: 1; }
+            100% { transform: scale(1.6); opacity: 0; }
+        }
+        .temp-drop-pin {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: #00897B;
+            border: 3px solid #ffffff;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        .sector-badge-label {
+            background: rgba(0, 137, 123, 0.9);
+            color: white;
+            font-weight: 800;
+            font-size: 11px;
+            padding: 3px 8px;
+            border-radius: 12px;
+            border: 1.5px solid #ffffff;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.25);
+            white-space: nowrap;
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
 
-    // Mid blue halo ring
-    drawCircle(
-        color = Color(0x4D1976D2),
-        radius = baseRadius * 1.6f,
-        center = pos
-    )
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        var map = L.map('map', {
+            center: [$initialLat, $initialLng],
+            zoom: $initialZoom,
+            zoomControl: false,
+            attributionControl: false,
+            dragging: true,
+            touchZoom: true,
+            scrollWheelZoom: true,
+            doubleClickZoom: true,
+            boxZoom: true,
+            tapHold: false,
+            inertia: true,
+            inertiaDeceleration: 3000,
+            inertiaMaxSpeed: 1500
+        });
 
-    // Crisp white border
-    drawCircle(
-        color = Color.White,
-        radius = baseRadius + 2.5.dp.toPx(),
-        center = pos
-    )
+        // Official Google Maps Tile Layers
+        var googleRoadmapLayer = L.tileLayer('https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
+            maxZoom: 21,
+            maxNativeZoom: 20,
+            subdomains: ['0', '1', '2', '3']
+        }).addTo(map);
 
-    // Solid blue GPS center
-    drawCircle(
-        color = Color(0xFF1E88E5),
-        radius = baseRadius,
-        center = pos
-    )
+        var googleSatelliteLayer = L.tileLayer('https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+            maxZoom: 21,
+            maxNativeZoom: 20,
+            subdomains: ['0', '1', '2', '3']
+        });
 
-    // Inner bright center dot
-    drawCircle(
-        color = Color.White,
-        radius = baseRadius * 0.35f,
-        center = pos
-    )
-}
+        var googleTerrainLayer = L.tileLayer('https://mt{s}.google.com/vt/lyrs=p&x={x}&y={y}&z={z}', {
+            maxZoom: 21,
+            maxNativeZoom: 20,
+            subdomains: ['0', '1', '2', '3']
+        });
 
-private fun DrawScope.drawCoastalTerrain(
-    width: Float,
-    height: Float,
-    centerLat: Double,
-    centerLng: Double,
-    scale: Float,
-    isSatellite: Boolean
-) {
-    // Water basin background
-    val waterColor = if (isSatellite) Color(0xFF1E3A3A) else Color(0xFFBFE0E9)
-    val landColor = if (isSatellite) Color(0xFF23362A) else Color(0xFFD4E3CE)
-    val roadColor = if (isSatellite) Color(0x33FFFFFF) else Color(0xFFF2EFE9)
+        var currentTileLayer = googleRoadmapLayer;
 
-    // Base land fill
-    drawRect(color = landColor, size = Size(width, height))
-
-    // Curved estuary water channel running through right & bottom
-    val waterPath = Path().apply {
-        moveTo(width * 0.72f, 0f)
-        cubicTo(
-            width * 0.65f, height * 0.3f,
-            width * 0.85f, height * 0.6f,
-            width * 0.55f, height * 0.82f
-        )
-        cubicTo(
-            width * 0.35f, height * 0.95f,
-            width * 0.1f, height * 0.88f,
-            0f, height * 0.95f
-        )
-        lineTo(0f, height)
-        lineTo(width, height)
-        lineTo(width, 0f)
-        close()
-    }
-
-    drawPath(path = waterPath, color = waterColor, style = Fill)
-
-    // Secondary tidal creek
-    val creekPath = Path().apply {
-        moveTo(width * 0.45f, 0f)
-        cubicTo(
-            width * 0.48f, height * 0.25f,
-            width * 0.38f, height * 0.45f,
-            width * 0.42f, height * 0.6f
-        )
-    }
-    drawPath(
-        path = creekPath,
-        color = waterColor.copy(alpha = 0.85f),
-        style = Stroke(width = 14.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
-    )
-
-    // Faint grid / road layout lines in northwest
-    val gridColor = roadColor.copy(alpha = 0.6f)
-    for (i in 1..4) {
-        val y = height * 0.08f * i
-        drawLine(
-            color = gridColor,
-            start = Offset(0f, y),
-            end = Offset(width * 0.4f, y + 20f),
-            strokeWidth = 2.5f
-        )
-    }
-    for (j in 1..4) {
-        val x = width * 0.09f * j
-        drawLine(
-            color = gridColor,
-            start = Offset(x, 0f),
-            end = Offset(x + 15f, height * 0.35f),
-            strokeWidth = 2.5f
-        )
-    }
-}
-
-private fun DrawScope.drawMangroveMarker(
-    pos: Offset,
-    category: EntryCategory
-) {
-    val radius = 17.dp.toPx()
-    val badgeColor = category.composeColor
-
-    // Soft drop shadow
-    drawCircle(
-        color = Color(0x33000000),
-        radius = radius + 3.dp.toPx(),
-        center = pos + Offset(0f, 2.5.dp.toPx())
-    )
-
-    // Outer crisp white ring
-    drawCircle(
-        color = Color.White,
-        radius = radius + 2.5.dp.toPx(),
-        center = pos
-    )
-
-    // Colored badge circle
-    drawCircle(
-        color = badgeColor,
-        radius = radius,
-        center = pos
-    )
-
-    // Custom inner icon paths matching mockup
-    when (category) {
-        EntryCategory.THRIVING_GROWTH -> {
-            // 3-leaf mangrove sprout (White)
-            val centerLeaf = Path().apply {
-                moveTo(pos.x, pos.y - radius * 0.58f)
-                cubicTo(
-                    pos.x + radius * 0.25f, pos.y - radius * 0.1f,
-                    pos.x, pos.y + radius * 0.25f,
-                    pos.x, pos.y + radius * 0.25f
-                )
-                cubicTo(
-                    pos.x, pos.y + radius * 0.25f,
-                    pos.x - radius * 0.25f, pos.y - radius * 0.1f,
-                    pos.x, pos.y - radius * 0.58f
-                )
-                close()
+        function setMapLayer(name) {
+            map.removeLayer(currentTileLayer);
+            if (name === 'satellite') {
+                currentTileLayer = googleSatelliteLayer;
+            } else if (name === 'terrain') {
+                currentTileLayer = googleTerrainLayer;
+            } else {
+                currentTileLayer = googleRoadmapLayer;
             }
-            drawPath(centerLeaf, Color.White, style = Fill)
-
-            // Left leaf
-            val leftLeaf = Path().apply {
-                moveTo(pos.x - radius * 0.1f, pos.y + radius * 0.05f)
-                cubicTo(
-                    pos.x - radius * 0.55f, pos.y - radius * 0.15f,
-                    pos.x - radius * 0.5f, pos.y + radius * 0.25f,
-                    pos.x, pos.y + radius * 0.32f
-                )
-                close()
-            }
-            drawPath(leftLeaf, Color.White, style = Fill)
-
-            // Right leaf
-            val rightLeaf = Path().apply {
-                moveTo(pos.x + radius * 0.1f, pos.y + radius * 0.05f)
-                cubicTo(
-                    pos.x + radius * 0.55f, pos.y - radius * 0.15f,
-                    pos.x + radius * 0.5f, pos.y + radius * 0.25f,
-                    pos.x, pos.y + radius * 0.32f
-                )
-                close()
-            }
-            drawPath(rightLeaf, Color.White, style = Fill)
-
-            // Roots / stem base
-            drawLine(
-                color = Color.White,
-                start = Offset(pos.x, pos.y + radius * 0.25f),
-                end = Offset(pos.x, pos.y + radius * 0.52f),
-                strokeWidth = 2.dp.toPx()
-            )
+            currentTileLayer.addTo(map);
         }
 
-        EntryCategory.FAIR_GROWTH -> {
-            // Upward Growth Trend Arrow with Sprout
-            val arrowPath = Path().apply {
-                moveTo(pos.x - radius * 0.45f, pos.y + radius * 0.35f)
-                lineTo(pos.x - radius * 0.1f, pos.y)
-                lineTo(pos.x + radius * 0.15f, pos.y + radius * 0.15f)
-                lineTo(pos.x + radius * 0.45f, pos.y - radius * 0.35f)
-            }
-            drawPath(
-                path = arrowPath,
-                color = Color.White,
-                style = Stroke(width = 2.8.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
-            )
+        var markersGroup = L.layerGroup().addTo(map);
+        var zonesGroup = L.layerGroup().addTo(map);
+        var tempPinMarker = null;
+        var userLocationMarker = null;
 
-            // Arrow head
-            val arrowHead = Path().apply {
-                moveTo(pos.x + radius * 0.15f, pos.y - radius * 0.35f)
-                lineTo(pos.x + radius * 0.45f, pos.y - radius * 0.35f)
-                lineTo(pos.x + radius * 0.45f, pos.y - radius * 0.05f)
-            }
-            drawPath(
-                path = arrowHead,
-                color = Color.White,
-                style = Stroke(width = 2.8.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
-            )
+        function updateMarkers(markers) {
+            markersGroup.clearLayers();
+            markers.forEach(function(m) {
+                var iconHtml = '<div class="custom-google-marker">' +
+                    '<div class="custom-pin-head" style="background:' + m.color + ';">' +
+                        '<div class="custom-pin-core"></div>' +
+                    '</div>' +
+                    '<div class="custom-pin-label">' + m.title + '</div>' +
+                '</div>';
+
+                var customIcon = L.divIcon({
+                    html: iconHtml,
+                    className: '',
+                    iconSize: [80, 48],
+                    iconAnchor: [40, 30]
+                });
+
+                var marker = L.marker([m.lat, m.lng], { icon: customIcon }).addTo(markersGroup);
+                marker.on('click', function(e) {
+                    L.DomEvent.stopPropagation(e);
+                    if (window.AndroidBridge) {
+                        window.AndroidBridge.onMarkerClicked(m.id);
+                    }
+                });
+            });
         }
 
-        EntryCategory.AT_RISK_DYING -> {
-            // Dying / Defoliated Leaf Warning Symbol
-            val leafPath = Path().apply {
-                moveTo(pos.x, pos.y - radius * 0.55f)
-                cubicTo(
-                    pos.x + radius * 0.5f, pos.y - radius * 0.15f,
-                    pos.x + radius * 0.25f, pos.y + radius * 0.45f,
-                    pos.x, pos.y + radius * 0.55f
-                )
-                cubicTo(
-                    pos.x - radius * 0.25f, pos.y + radius * 0.45f,
-                    pos.x - radius * 0.5f, pos.y - radius * 0.15f,
-                    pos.x, pos.y - radius * 0.55f
-                )
-                close()
-            }
-            drawPath(leafPath, Color.White, style = Fill)
+        function updateZones(zones, activeZoneId) {
+            zonesGroup.clearLayers();
+            zones.forEach(function(z) {
+                var isActive = (z.id === activeZoneId);
+                var polygon = L.polygon(z.coordinates, {
+                    color: z.color,
+                    fillColor: z.color,
+                    fillOpacity: isActive ? 0.35 : 0.15,
+                    weight: isActive ? 3 : 1.8,
+                    dashArray: '8, 6'
+                }).addTo(zonesGroup);
 
-            // Inner alert vein cut
-            drawLine(
-                color = badgeColor,
-                start = Offset(pos.x, pos.y - radius * 0.35f),
-                end = Offset(pos.x, pos.y + radius * 0.4f),
-                strokeWidth = 2.dp.toPx(),
-                cap = StrokeCap.Round
-            )
-            drawLine(
-                color = badgeColor,
-                start = Offset(pos.x - radius * 0.2f, pos.y - radius * 0.05f),
-                end = Offset(pos.x, pos.y + radius * 0.1f),
-                strokeWidth = 1.5.dp.toPx(),
-                cap = StrokeCap.Round
-            )
-            drawLine(
-                color = badgeColor,
-                start = Offset(pos.x + radius * 0.2f, pos.y - radius * 0.05f),
-                end = Offset(pos.x, pos.y + radius * 0.1f),
-                strokeWidth = 1.5.dp.toPx(),
-                cap = StrokeCap.Round
-            )
+                polygon.on('click', function(e) {
+                    L.DomEvent.stopPropagation(e);
+                    if (window.AndroidBridge) {
+                        window.AndroidBridge.onZoneClicked(z.id);
+                    }
+                });
+
+                // Sector Badge Marker at center
+                var badgeIcon = L.divIcon({
+                    html: '<div class="sector-badge-label" style="background:' + z.color + ';">' + z.sectorCode + '</div>',
+                    className: '',
+                    iconSize: [60, 24],
+                    iconAnchor: [30, 12]
+                });
+                var badgeMarker = L.marker([z.centerLat, z.centerLng], { icon: badgeIcon }).addTo(zonesGroup);
+                badgeMarker.on('click', function(e) {
+                    L.DomEvent.stopPropagation(e);
+                    if (window.AndroidBridge) {
+                        window.AndroidBridge.onZoneClicked(z.id);
+                    }
+                });
+            });
         }
-    }
-}
 
-private fun DrawScope.drawTemporaryDropPin(pos: Offset, pulseScale: Float) {
-    val baseRadius = 20.dp.toPx()
+        function setTempPin(lat, lng) {
+            if (tempPinMarker) {
+                map.removeLayer(tempPinMarker);
+            }
+            var pinIcon = L.divIcon({
+                html: '<div class="temp-drop-pin">+</div>',
+                className: '',
+                iconSize: [24, 24],
+                iconAnchor: [12, 12]
+            });
+            tempPinMarker = L.marker([lat, lng], { icon: pinIcon }).addTo(map);
+        }
 
-    // Pulse wave
-    drawCircle(
-        color = MangroveTealPrimary.copy(alpha = 0.25f),
-        radius = baseRadius * pulseScale * 1.4f,
-        center = pos
-    )
+        function clearTempPin() {
+            if (tempPinMarker) {
+                map.removeLayer(tempPinMarker);
+                tempPinMarker = null;
+            }
+        }
 
-    // Inner glowing ring
-    drawCircle(
-        color = MangroveTealPrimary,
-        radius = baseRadius,
-        center = pos
-    )
+        function setUserLocation(lat, lng) {
+            if (userLocationMarker) {
+                userLocationMarker.setLatLng([lat, lng]);
+            } else {
+                var userIcon = L.divIcon({
+                    html: '<div class="user-pulse-marker"></div>',
+                    className: '',
+                    iconSize: [22, 22],
+                    iconAnchor: [11, 11]
+                });
+                userLocationMarker = L.marker([lat, lng], { icon: userIcon }).addTo(map);
+            }
+        }
 
-    drawCircle(
-        color = Color.White,
-        radius = baseRadius,
-        center = pos,
-        style = Stroke(width = 3.dp.toPx())
-    )
+        function panToCoordinates(lat, lng) {
+            map.panTo([lat, lng], { animate: true, duration: 0.5 });
+        }
 
-    // Plus icon in center
-    val arm = 7.dp.toPx()
-    drawLine(
-        color = Color.White,
-        start = Offset(pos.x - arm, pos.y),
-        end = Offset(pos.x + arm, pos.y),
-        strokeWidth = 3.dp.toPx()
-    )
-    drawLine(
-        color = Color.White,
-        start = Offset(pos.x, pos.y - arm),
-        end = Offset(pos.x, pos.y + arm),
-        strokeWidth = 3.dp.toPx()
-    )
+        function panByOffset(dx, dy) {
+            map.panBy([dx, dy], { animate: true, duration: 0.35 });
+        }
+
+        function flyToLocation(lat, lng, zoom) {
+            map.flyTo([lat, lng], zoom || 15, { animate: true, duration: 1.0 });
+        }
+
+        map.on('click', function(e) {
+            if (window.AndroidBridge) {
+                window.AndroidBridge.onMapClicked(e.latlng.lat, e.latlng.lng);
+            }
+        });
+
+        map.on('moveend', function() {
+            var c = map.getCenter();
+            if (window.AndroidBridge) {
+                window.AndroidBridge.onMapMoved(c.lat, c.lng, map.getZoom());
+            }
+        });
+    </script>
+</body>
+</html>
+    """.trimIndent()
 }

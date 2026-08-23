@@ -1,5 +1,6 @@
 package com.example.treemap.ui
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -10,6 +11,8 @@ import com.example.treemap.data.model.TreeEntry
 import com.example.treemap.data.model.UserAccount
 import com.example.treemap.data.repository.TreeRepository
 import com.example.treemap.data.repository.UserRepository
+import com.example.treemap.util.LocationHelper
+import com.example.treemap.util.PlaceSearchResult
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -19,8 +22,8 @@ import kotlinx.coroutines.launch
 
 enum class AppTab(val title: String) {
     MAP("Map View"),
-    JOURNAL("Field Journal"),
-    COMMUNITY_STATS("Impact & Analytics"),
+    ANALYSIS("Analysis"),
+    MY_PLACES("Impact & Status"),
     ADMIN_PANEL("Admin Panel")
 }
 
@@ -130,6 +133,19 @@ class MainViewModel(
         }
     }
 
+    fun register(email: String, name: String, pass: String) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(loginErrorMessage = null)
+            val user = userRepository.grantAccess(email, name, UserAccount.ROLE_VOLUNTEER, pass)
+            userRepository.authenticate(email, pass)
+            _uiState.value = _uiState.value.copy(
+                lastReporterName = user.displayName,
+                currentTab = AppTab.MAP,
+                toastMessage = "Welcome, ${user.displayName}!"
+            )
+        }
+    }
+
     fun grantAccessToEmail(email: String, name: String, role: String, pass: String) {
         viewModelScope.launch {
             val user = userRepository.grantAccess(email, name, role, pass)
@@ -190,6 +206,43 @@ class MainViewModel(
 
     fun setSearchQuery(query: String) {
         _uiState.value = _uiState.value.copy(searchQuery = query)
+    }
+
+    fun searchAndNavigate(context: Context, query: String) {
+        val trimmed = query.trim()
+        if (trimmed.isBlank()) return
+
+        viewModelScope.launch {
+            val result = LocationHelper.resolveLocation(context, trimmed)
+            if (result != null) {
+                _uiState.value = _uiState.value.copy(
+                    currentTab = AppTab.MAP,
+                    centerLat = result.lat,
+                    centerLng = result.lng,
+                    zoomLevel = 1.5f,
+                    temporaryPin = Pair(result.lat, result.lng),
+                    searchQuery = result.title,
+                    toastMessage = "Redirected to ${result.title} (${"%.4f".format(result.lat)}°, ${"%.4f".format(result.lng)}°)"
+                )
+            } else {
+                _uiState.value = _uiState.value.copy(
+                    searchQuery = trimmed,
+                    toastMessage = "Filtered map entries matching '$trimmed'"
+                )
+            }
+        }
+    }
+
+    fun selectPlaceSearchResult(result: PlaceSearchResult) {
+        _uiState.value = _uiState.value.copy(
+            currentTab = AppTab.MAP,
+            centerLat = result.lat,
+            centerLng = result.lng,
+            zoomLevel = 1.5f,
+            temporaryPin = Pair(result.lat, result.lng),
+            searchQuery = result.title,
+            toastMessage = "Redirected to ${result.title}"
+        )
     }
 
     fun onMapTapped(lat: Double, lng: Double) {
@@ -253,16 +306,28 @@ class MainViewModel(
         )
     }
 
+    fun updateMapCenter(lat: Double, lng: Double, zoom: Float) {
+        _uiState.value = _uiState.value.copy(
+            centerLat = lat,
+            centerLng = lng
+        )
+    }
+
     fun zoomIn() {
         _uiState.value = _uiState.value.copy(
-            zoomLevel = (_uiState.value.zoomLevel + 0.3f).coerceAtMost(4.0f)
+            zoomLevel = (_uiState.value.zoomLevel + 0.35f).coerceAtMost(5.5f)
         )
     }
 
     fun zoomOut() {
         _uiState.value = _uiState.value.copy(
-            zoomLevel = (_uiState.value.zoomLevel - 0.3f).coerceAtLeast(0.6f)
+            zoomLevel = (_uiState.value.zoomLevel - 0.35f).coerceAtLeast(0.4f)
         )
+    }
+
+    fun adjustZoom(deltaFactor: Float) {
+        val newZoom = (_uiState.value.zoomLevel + deltaFactor).coerceIn(0.4f, 5.5f)
+        _uiState.value = _uiState.value.copy(zoomLevel = newZoom)
     }
 
     fun toggleSectorOverviewCollapsed() {

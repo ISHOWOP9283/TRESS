@@ -8,6 +8,7 @@ import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
 import android.net.Uri
+import androidx.core.content.FileProvider
 import java.io.File
 import java.io.FileOutputStream
 import java.text.SimpleDateFormat
@@ -26,7 +27,28 @@ object ImageStorageHelper {
     }
 
     /**
-     * Saves a captured Bitmap from camera to app's internal storage
+     * Creates a high-resolution target file and returns its FileProvider content URI + file path
+     * for full sensor resolution photo capture via TakePicture contract.
+     */
+    fun createImageUriForCapture(context: Context): Pair<Uri, String>? {
+        return try {
+            val dir = getPhotosDirectory(context)
+            val fileName = "IMG_FIELD_${SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())}_${UUID.randomUUID().toString().take(6)}.jpg"
+            val file = File(dir, fileName)
+            val uri = FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.fileprovider",
+                file
+            )
+            Pair(uri, file.absolutePath)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
+        }
+    }
+
+    /**
+     * Saves a captured Bitmap from camera to app's internal storage in high quality JPEG
      */
     fun saveBitmapToInternalStorage(context: Context, bitmap: Bitmap): String? {
         return try {
@@ -34,7 +56,7 @@ object ImageStorageHelper {
             val fileName = "IMG_FIELD_${SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())}_${UUID.randomUUID().toString().take(6)}.jpg"
             val file = File(dir, fileName)
             FileOutputStream(file).use { out ->
-                bitmap.compress(Bitmap.CompressFormat.JPEG, 90, out)
+                bitmap.compress(Bitmap.CompressFormat.JPEG, 95, out)
                 out.flush()
             }
             file.absolutePath
@@ -45,7 +67,7 @@ object ImageStorageHelper {
     }
 
     /**
-     * Copies an image from a Content URI (e.g. from gallery picker) to app's internal storage
+     * Copies an image from a Content URI (e.g. from gallery picker or camera) to app's internal storage in original full resolution
      */
     fun saveUriToInternalStorage(context: Context, uri: Uri): String? {
         return try {

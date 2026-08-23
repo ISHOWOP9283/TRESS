@@ -7,7 +7,7 @@ import androidx.room.RoomDatabase
 import com.example.treemap.data.model.TreeEntry
 import com.example.treemap.data.model.UserAccount
 
-@Database(entities = [TreeEntry::class, UserAccount::class], version = 3, exportSchema = false)
+@Database(entities = [TreeEntry::class, UserAccount::class], version = 4, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun treeDao(): TreeDao
     abstract fun userDao(): UserDao
@@ -21,7 +21,7 @@ abstract class AppDatabase : RoomDatabase() {
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
                     AppDatabase::class.java,
-                    "mangrove_mapper_v3.db"
+                    "mangrove_mapper_v4.db"
                 )
                     .fallbackToDestructiveMigration()
                     .fallbackToDestructiveMigrationOnDowngrade()
