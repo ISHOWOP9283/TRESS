@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -27,6 +28,8 @@ import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Park
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.PictureAsPdf
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -48,6 +51,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -63,7 +67,11 @@ import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.treemap.data.model.TreeEntry
+import com.example.treemap.ui.components.ObservationImageView
 import com.example.treemap.ui.theme.MangroveTealPrimary
+import com.example.treemap.util.ImageStorageHelper
+import com.example.treemap.util.PdfReportGenerator
+import kotlinx.coroutines.launch
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -173,20 +181,14 @@ fun EntryDetailSheet(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     items(images) { imagePath ->
-                        val imageModel = remember(imagePath) {
-                            if (imagePath.startsWith("/")) File(imagePath) else imagePath
-                        }
                         Box(
                             modifier = Modifier
                                 .size(width = 130.dp, height = 96.dp)
                                 .clip(RoundedCornerShape(12.dp))
                                 .clickable { inspectedImage = imagePath }
                         ) {
-                            AsyncImage(
-                                model = ImageRequest.Builder(context)
-                                    .data(imageModel)
-                                    .crossfade(true)
-                                    .build(),
+                            ObservationImageView(
+                                imagePath = imagePath,
                                 contentDescription = "Observation photo",
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier.fillMaxSize()
@@ -364,18 +366,54 @@ fun EntryDetailSheet(
 
             Spacer(modifier = Modifier.height(20.dp))
 
+            val coroutineScope = rememberCoroutineScope()
+            var isGeneratingPdf by remember { mutableStateOf(false) }
+
+            // Export PDF Report Button
             Button(
-                onClick = onDismiss,
+                onClick = {
+                    if (!isGeneratingPdf) {
+                        isGeneratingPdf = true
+                        coroutineScope.launch {
+                            PdfReportGenerator.generateAndShareReport(context, entry)
+                            isGeneratingPdf = false
+                        }
+                    }
+                },
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = MangroveTealPrimary),
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(48.dp)
             ) {
+                Icon(
+                    imageVector = Icons.Default.PictureAsPdf,
+                    contentDescription = "Export PDF",
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = if (isGeneratingPdf) "Generating PDF Report..." else "Export PDF for Governance / NGO",
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp
+                    )
+                )
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            OutlinedButton(
+                onClick = onDismiss,
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(46.dp)
+            ) {
                 Text(
                     text = "Close",
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        fontWeight = FontWeight.Bold
+                    style = MaterialTheme.typography.bodyLarge.copy(
+                        fontWeight = FontWeight.Medium
                     )
                 )
             }
@@ -384,9 +422,9 @@ fun EntryDetailSheet(
 
     // Full photo modal zoom
     inspectedImage?.let { photoPath ->
-        val imageModel = remember(photoPath) {
-            if (photoPath.startsWith("/")) File(photoPath) else photoPath
-        }
+        val coroutineScope = rememberCoroutineScope()
+        var isGeneratingPdfModal by remember { mutableStateOf(false) }
+
         Dialog(
             onDismissRequest = { inspectedImage = null },
             properties = DialogProperties(usePlatformDefaultWidth = false)
@@ -397,11 +435,8 @@ fun EntryDetailSheet(
                     .background(Color.Black.copy(alpha = 0.94f))
                     .clickable { inspectedImage = null }
             ) {
-                AsyncImage(
-                    model = ImageRequest.Builder(context)
-                        .data(imageModel)
-                        .crossfade(true)
-                        .build(),
+                ObservationImageView(
+                    imagePath = photoPath,
                     contentDescription = "Full inspection photo",
                     contentScale = ContentScale.Fit,
                     modifier = Modifier
@@ -409,18 +444,55 @@ fun EntryDetailSheet(
                         .align(Alignment.Center)
                 )
 
-                IconButton(
-                    onClick = { inspectedImage = null },
+                // Top Actions in Modal
+                Row(
                     modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(16.dp)
+                        .fillMaxWidth()
+                        .align(Alignment.TopCenter)
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = "Close",
-                        tint = Color.White,
-                        modifier = Modifier.size(28.dp)
-                    )
+                    Button(
+                        onClick = {
+                            if (!isGeneratingPdfModal) {
+                                isGeneratingPdfModal = true
+                                coroutineScope.launch {
+                                    PdfReportGenerator.generateAndShareReport(context, entry)
+                                    isGeneratingPdfModal = false
+                                }
+                            }
+                        },
+                        shape = RoundedCornerShape(20.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MangroveTealPrimary),
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.PictureAsPdf,
+                            contentDescription = "Export PDF",
+                            tint = Color.White,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = if (isGeneratingPdfModal) "Generating..." else "Export PDF Report",
+                            color = Color.White,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    IconButton(
+                        onClick = { inspectedImage = null },
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Close",
+                            tint = Color.White,
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
                 }
 
                 Surface(

@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.HourglassTop
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Notes
+import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material.icons.filled.Warning
@@ -46,7 +47,11 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -62,11 +67,14 @@ import coil.request.ImageRequest
 import com.example.treemap.data.model.EntryCategory
 import com.example.treemap.data.model.TreeEntry
 import com.example.treemap.data.model.UserAccount
+import com.example.treemap.ui.components.ObservationImageView
 import com.example.treemap.ui.theme.MangroveDeepTeal
 import com.example.treemap.ui.theme.MangroveTealPrimary
 import com.example.treemap.ui.theme.StatusAtRisk
 import com.example.treemap.ui.theme.StatusFair
 import com.example.treemap.ui.theme.StatusThriving
+import com.example.treemap.util.PdfReportGenerator
+import kotlinx.coroutines.launch
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -466,20 +474,14 @@ private fun UserPlaceCard(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     items(photoList) { imgPath ->
-                        val imgModel = remember(imgPath) {
-                            if (imgPath.startsWith("/")) File(imgPath) else imgPath
-                        }
                         Box(
                             modifier = Modifier
                                 .size(72.dp)
                                 .clip(RoundedCornerShape(8.dp))
                                 .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
                         ) {
-                            AsyncImage(
-                                model = ImageRequest.Builder(context)
-                                    .data(imgModel)
-                                    .crossfade(true)
-                                    .build(),
+                            ObservationImageView(
+                                imagePath = imgPath,
                                 contentDescription = "Place Photo",
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier.fillMaxSize()
@@ -561,31 +563,68 @@ private fun UserPlaceCard(
             HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Action Buttons (View on Map & Delete)
+            // Action Buttons (PDF Report, View on Map & Delete)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                FilledTonalButton(
-                    onClick = onViewOnMap,
-                    shape = RoundedCornerShape(8.dp),
-                    colors = ButtonDefaults.filledTonalButtonColors(
-                        containerColor = MangroveTealPrimary.copy(alpha = 0.12f),
-                        contentColor = MangroveTealPrimary
-                    ),
-                    modifier = Modifier.height(34.dp)
+                val coroutineScope = rememberCoroutineScope()
+                var isGeneratingPdf by remember { mutableStateOf(false) }
+
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Map,
-                        contentDescription = null,
-                        modifier = Modifier.size(14.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = "View on Map",
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold)
-                    )
+                    FilledTonalButton(
+                        onClick = {
+                            if (!isGeneratingPdf) {
+                                isGeneratingPdf = true
+                                coroutineScope.launch {
+                                    PdfReportGenerator.generateAndShareReport(context, entry)
+                                    isGeneratingPdf = false
+                                }
+                            }
+                        },
+                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.filledTonalButtonColors(
+                            containerColor = MangroveTealPrimary.copy(alpha = 0.15f),
+                            contentColor = MangroveTealPrimary
+                        ),
+                        modifier = Modifier.height(34.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.PictureAsPdf,
+                            contentDescription = "Export PDF",
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = if (isGeneratingPdf) "PDF..." else "PDF Report",
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold)
+                        )
+                    }
+
+                    FilledTonalButton(
+                        onClick = onViewOnMap,
+                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.filledTonalButtonColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                        ),
+                        modifier = Modifier.height(34.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Map,
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "Map",
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold)
+                        )
+                    }
                 }
 
                 IconButton(

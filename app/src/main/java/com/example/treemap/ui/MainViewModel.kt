@@ -18,6 +18,8 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 enum class AppTab(val title: String) {
@@ -41,6 +43,7 @@ data class UiState(
     val zoomLevel: Float = 1.6f,
     val isAddDialogOpen: Boolean = false,
     val isReportsDialogOpen: Boolean = false,
+    val isSyncDialogOpen: Boolean = false,
     val isDrawerOpen: Boolean = false,
     val searchQuery: String = "",
     val lastReporterName: String = "Field Observer Alex",
@@ -91,6 +94,31 @@ class MainViewModel(
             try {
                 userRepository.seedDefaultUsersIfEmpty()
                 repository.seedSampleDataIfEmpty()
+                syncCloudDataSilently()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+
+        // Periodic real-time background sync loop every 5 seconds for cross-device updates
+        viewModelScope.launch {
+            while (isActive) {
+                delay(5000)
+                try {
+                    repository.syncWithCloud()
+                    userRepository.syncUsersWithCloud()
+                } catch (e: Exception) {
+                    // Quietly ignore background poll exceptions
+                }
+            }
+        }
+    }
+
+    private fun syncCloudDataSilently() {
+        viewModelScope.launch {
+            try {
+                repository.syncWithCloud()
+                userRepository.syncUsersWithCloud()
             } catch (e: Exception) {
                 e.printStackTrace()
             }
@@ -109,6 +137,7 @@ class MainViewModel(
                     currentTab = if (user.isAdmin) AppTab.ADMIN_PANEL else AppTab.MAP,
                     toastMessage = "Welcome, ${user.displayName} (${user.roleLabel})"
                 )
+                syncCloudDataSilently()
             } else {
                 _uiState.value = _uiState.value.copy(
                     loginErrorMessage = "Invalid credentials. Use 'admin' & 'admin' or contact administrator."
@@ -187,6 +216,9 @@ class MainViewModel(
 
     fun setTab(tab: AppTab) {
         _uiState.value = _uiState.value.copy(currentTab = tab)
+        if (tab == AppTab.ADMIN_PANEL) {
+            syncCloudDataSilently()
+        }
     }
 
     fun setCategoryFilter(category: EntryCategory?) {
@@ -273,6 +305,32 @@ class MainViewModel(
 
     fun closeReportsDialog() {
         _uiState.value = _uiState.value.copy(isReportsDialogOpen = false)
+    }
+
+    fun openSyncDialog() {
+        _uiState.value = _uiState.value.copy(isSyncDialogOpen = true)
+    }
+
+    fun closeSyncDialog() {
+        _uiState.value = _uiState.value.copy(isSyncDialogOpen = false)
+    }
+
+    fun syncCloudData() {
+        viewModelScope.launch {
+            val entryResult = repository.syncWithCloud()
+            val userResult = userRepository.syncUsersWithCloud()
+            if (entryResult.isSuccess) {
+                val count = entryResult.getOrDefault(0)
+                _uiState.value = _uiState.value.copy(
+                    toastMessage = "☁️ Supabase Synced: $count observation(s) up to date!"
+                )
+            } else {
+                val msg = entryResult.exceptionOrNull()?.message ?: "Check Supabase Settings"
+                _uiState.value = _uiState.value.copy(
+                    toastMessage = "Sync notice: $msg"
+                )
+            }
+        }
     }
 
     fun selectEntry(entry: TreeEntry?) {
@@ -371,14 +429,18 @@ class MainViewModel(
     }
 
     fun saveEntry(entry: TreeEntry) {
+        // Immediate UI dismissal - zero delay!
+        _uiState.value = _uiState.value.copy(
+            isAddDialogOpen = false,
+            temporaryPin = null,
+            lastReporterName = entry.reporter,
+            toastMessage = "Saving observation in ${_uiState.value.selectedZone.sectorCode}..."
+        )
         viewModelScope.launch {
             repository.saveReporter(entry.reporter)
             repository.insert(entry)
             _uiState.value = _uiState.value.copy(
-                isAddDialogOpen = false,
-                temporaryPin = null,
-                lastReporterName = entry.reporter,
-                toastMessage = "Observation logged in ${_uiState.value.selectedZone.sectorCode}"
+                toastMessage = "Observation saved & synced to Supabase"
             )
         }
     }

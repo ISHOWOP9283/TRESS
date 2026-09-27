@@ -81,6 +81,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
+import com.example.treemap.ui.components.bouncyPress
+import com.example.treemap.ui.components.bounceClick
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.treemap.ui.theme.MangroveDeepTeal
@@ -229,7 +231,7 @@ fun LoginScreen(
                                         )
                                     )
                                     Text(
-                                        text = "Project Tomorrow",
+                                        text = "Protect Tomorrow",
                                         style = MaterialTheme.typography.labelSmall.copy(
                                             color = Color(0xFFA7F3D0),
                                             fontSize = 10.sp
@@ -566,6 +568,7 @@ private fun LoginFormContent(
         modifier = Modifier
             .fillMaxWidth()
             .height(50.dp)
+            .bouncyPress()
             .testTag("login_submit_button")
     ) {
         Text(

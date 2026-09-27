@@ -340,7 +340,7 @@ fun InteractiveMapView(
                 shape = CircleShape,
                 color = Color.White,
                 shadowElevation = 5.dp,
-                modifier = Modifier.size(44.dp)
+                modifier = Modifier.size(44.dp).bouncyPress()
             ) {
                 IconButton(
                     onClick = {
@@ -361,35 +361,12 @@ fun InteractiveMapView(
                 }
             }
 
-            // Compass / Reset North & Recenter
-            Surface(
-                shape = CircleShape,
-                color = Color.White,
-                shadowElevation = 5.dp,
-                modifier = Modifier.size(44.dp)
-            ) {
-                IconButton(
-                    onClick = {
-                        onRecenter()
-                        webViewRef?.evaluateJavascript("panToCoordinates(${activeZone.centerLat}, ${activeZone.centerLng});", null)
-                    },
-                    modifier = Modifier.fillMaxSize().testTag("compass_recenter_button")
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Explore,
-                        contentDescription = "Reset North & Recenter",
-                        tint = Color(0xFFE53935),
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
-            }
-
             // Live GPS "My Location" Button
             Surface(
                 shape = CircleShape,
                 color = if (userLocation != null) MangroveTealPrimary else Color.White,
                 shadowElevation = 6.dp,
-                modifier = Modifier.size(46.dp)
+                modifier = Modifier.size(46.dp).bouncyPress()
             ) {
                 IconButton(
                     onClick = {

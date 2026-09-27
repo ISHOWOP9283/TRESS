@@ -12,6 +12,9 @@ interface TreeDao {
     @Query("SELECT * FROM entries ORDER BY date DESC")
     fun getAllEntries(): Flow<List<TreeEntry>>
 
+    @Query("SELECT * FROM entries ORDER BY date DESC")
+    suspend fun getAllEntriesList(): List<TreeEntry>
+
     @Query("SELECT * FROM entries WHERE id = :id LIMIT 1")
     suspend fun getEntryById(id: Long): TreeEntry?
 

@@ -344,7 +344,7 @@ private fun FilterChipPill(
         modifier = modifier
             .height(34.dp)
             .clip(RoundedCornerShape(20.dp))
-            .clickable(onClick = onClick)
+            .bounceClick(onClick = onClick)
             .testTag("filter_chip_${label.lowercase().replace(" ", "_")}")
     ) {
         Row(

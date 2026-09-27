@@ -3,6 +3,13 @@ package com.example.treemap.ui
 import android.Manifest
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -25,6 +32,7 @@ import androidx.compose.material.icons.filled.AddLocation
 import androidx.compose.material.icons.filled.AdminPanelSettings
 import androidx.compose.material.icons.filled.Analytics
 import androidx.compose.material.icons.filled.Assessment
+import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Map
@@ -75,6 +83,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.treemap.ui.components.bouncyPress
+import com.example.treemap.ui.components.bounceClick
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.treemap.data.model.EntryCategory
 import com.example.treemap.data.model.MangroveZone
@@ -83,6 +93,7 @@ import com.example.treemap.ui.auth.LoginScreen
 import com.example.treemap.ui.components.AddEntryDialog
 import com.example.treemap.ui.components.EntryDetailSheet
 import com.example.treemap.ui.components.InteractiveMapView
+import com.example.treemap.ui.components.SupabaseSyncDialog
 import com.example.treemap.ui.components.TopMangroveAppBar
 import com.example.treemap.ui.components.UserAnalysisScreen
 import com.example.treemap.ui.components.UserPlacesImpactScreen
@@ -218,7 +229,7 @@ fun MainScreen(
                                     )
                                 )
                                 Text(
-                                    text = "Project Tomorrow",
+                                    text = "Protect Tomorrow",
                                     style = MaterialTheme.typography.labelSmall.copy(
                                         color = Color(0xFFA7F3D0),
                                         fontSize = 10.sp
@@ -390,6 +401,42 @@ fun MainScreen(
                 NavigationDrawerItem(
                     icon = {
                         Icon(
+                            imageVector = Icons.Default.CloudSync,
+                            contentDescription = null,
+                            tint = Color(0xFF10B981)
+                        )
+                    },
+                    label = { 
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("Supabase Cloud Sync", fontWeight = FontWeight.SemiBold)
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = Color(0xFF10B981).copy(alpha = 0.18f)
+                            ) {
+                                Text(
+                                    text = "LIVE",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFF059669)
+                                    ),
+                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                )
+                            }
+                        }
+                    },
+                    selected = false,
+                    onClick = {
+                        coroutineScope.launch { drawerState.close() }
+                        viewModel.openSyncDialog()
+                    },
+                    modifier = Modifier.padding(horizontal = 12.dp)
+                )
+
+                NavigationDrawerItem(
+                    icon = {
+                        Icon(
                             imageVector = Icons.Default.Key,
                             contentDescription = null,
                             tint = MangroveTealPrimary
@@ -444,7 +491,7 @@ fun MainScreen(
                             )
                         )
                         Text(
-                            text = "Project Tomorrow",
+                            text = "Protect Tomorrow",
                             style = MaterialTheme.typography.labelSmall.copy(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontSize = 10.sp
@@ -564,133 +611,155 @@ fun MainScreen(
                     .fillMaxSize()
                     .padding(if (uiState.currentTab == AppTab.MAP) androidx.compose.foundation.layout.PaddingValues(0.dp) else innerPadding)
             ) {
-                when (uiState.currentTab) {
-                    AppTab.MAP -> {
-                        val filteredMapEntries = remember(entries, uiState.searchQuery) {
-                            if (uiState.searchQuery.isBlank()) {
-                                entries
-                            } else {
-                                val query = uiState.searchQuery.trim().lowercase()
-                                entries.filter {
-                                    it.title.lowercase().contains(query) ||
-                                    it.species.lowercase().contains(query) ||
-                                    (it.notes?.lowercase()?.contains(query) == true) ||
-                                    it.zoneId.lowercase().contains(query)
+                AnimatedContent(
+                    targetState = uiState.currentTab,
+                    transitionSpec = {
+                        if (targetState.ordinal > initialState.ordinal) {
+                            (slideInHorizontally(animationSpec = tween(300)) { width -> width / 4 } + fadeIn(animationSpec = tween(300)))
+                                .togetherWith(slideOutHorizontally(animationSpec = tween(250)) { width -> -width / 4 } + fadeOut(animationSpec = tween(250)))
+                        } else {
+                            (slideInHorizontally(animationSpec = tween(300)) { width -> -width / 4 } + fadeIn(animationSpec = tween(300)))
+                                .togetherWith(slideOutHorizontally(animationSpec = tween(250)) { width -> width / 4 } + fadeOut(animationSpec = tween(250)))
+                        }
+                    },
+                    label = "tab_navigation_shift_animation",
+                    modifier = Modifier.fillMaxSize()
+                ) { activeTab ->
+                    when (activeTab) {
+                        AppTab.MAP -> {
+                            val filteredMapEntries = remember(entries, uiState.searchQuery) {
+                                if (uiState.searchQuery.isBlank()) {
+                                    entries
+                                } else {
+                                    val query = uiState.searchQuery.trim().lowercase()
+                                    entries.filter {
+                                        it.title.lowercase().contains(query) ||
+                                        it.species.lowercase().contains(query) ||
+                                        (it.notes?.lowercase()?.contains(query) == true) ||
+                                        it.zoneId.lowercase().contains(query)
+                                    }
                                 }
+                            }
+
+                            Box(modifier = Modifier.fillMaxSize()) {
+                                // 1. Google Maps Fullscreen Clean Interactive Map View (No swipe down card)
+                                InteractiveMapView(
+                                    entries = filteredMapEntries,
+                                    zones = viewModel.zones,
+                                    activeZone = uiState.selectedZone,
+                                    activeCategory = uiState.selectedCategory,
+                                    temporaryPin = uiState.temporaryPin,
+                                    userLocation = uiState.userLiveLocation,
+                                    centerLat = uiState.centerLat,
+                                    centerLng = uiState.centerLng,
+                                    zoomLevel = uiState.zoomLevel,
+                                    isFetchingLocation = uiState.isFetchingLocation,
+                                    onMapTapped = { lat, lng -> viewModel.onMapTapped(lat, lng) },
+                                    onEntrySelected = { entry -> viewModel.selectEntry(entry) },
+                                    onZoneSelected = { zone -> viewModel.selectZone(zone) },
+                                    onAddPointClick = { viewModel.openAddDialogAtCurrentCenter() },
+                                    onRecenter = { viewModel.recenter() },
+                                    onRequestLiveLocation = { requestLiveLocation() },
+                                    onPan = { dLat, dLng -> viewModel.pan(dLat, dLng) },
+                                    onMapMoved = { lat, lng, zoom -> viewModel.updateMapCenter(lat, lng, zoom) },
+                                    onZoomIn = { viewModel.zoomIn() },
+                                    onZoomOut = { viewModel.zoomOut() },
+                                    onZoomDelta = { viewModel.adjustZoom(it) },
+                                    modifier = Modifier.fillMaxSize()
+                                )
+
+                                // 2. Floating Google Maps Search Pill (with Profile button, no separate menu button)
+                                TopMangroveAppBar(
+                                    searchQuery = uiState.searchQuery,
+                                    onSearchQueryChange = { viewModel.setSearchQuery(it) },
+                                    onProfileClick = {
+                                        coroutineScope.launch { drawerState.open() }
+                                    },
+                                    onSearchSubmit = { viewModel.searchAndNavigate(context, it) },
+                                    onSelectPlaceResult = { viewModel.selectPlaceSearchResult(it) },
+                                    activeCategory = uiState.selectedCategory,
+                                    onCategorySelected = { viewModel.setCategoryFilter(it) },
+                                    modifier = Modifier.align(Alignment.TopCenter)
+                                )
+
+                                // 3. Floating Quick Action Button for Logging Observations directly on full map
+                                ExtendedFloatingActionButton(
+                                    onClick = { viewModel.openAddDialogAtCurrentCenter() },
+                                    icon = {
+                                        Icon(
+                                            imageVector = Icons.Default.AddLocation,
+                                            contentDescription = "Report Place"
+                                        )
+                                    },
+                                    text = { Text("Report Issue", fontWeight = FontWeight.Bold) },
+                                    containerColor = MangroveTealPrimary,
+                                    contentColor = Color.White,
+                                    modifier = Modifier
+                                        .align(Alignment.BottomEnd)
+                                        .padding(end = 16.dp, bottom = innerPadding.calculateBottomPadding() + 16.dp)
+                                        .bouncyPress()
+                                        .testTag("fab_report_issue_button")
+                                )
                             }
                         }
 
-                        Box(modifier = Modifier.fillMaxSize()) {
-                            // 1. Google Maps Fullscreen Clean Interactive Map View (No swipe down card)
-                            InteractiveMapView(
-                                entries = filteredMapEntries,
-                                zones = viewModel.zones,
-                                activeZone = uiState.selectedZone,
-                                activeCategory = uiState.selectedCategory,
-                                temporaryPin = uiState.temporaryPin,
-                                userLocation = uiState.userLiveLocation,
-                                centerLat = uiState.centerLat,
-                                centerLng = uiState.centerLng,
-                                zoomLevel = uiState.zoomLevel,
-                                isFetchingLocation = uiState.isFetchingLocation,
-                                onMapTapped = { lat, lng -> viewModel.onMapTapped(lat, lng) },
-                                onEntrySelected = { entry -> viewModel.selectEntry(entry) },
-                                onZoneSelected = { zone -> viewModel.selectZone(zone) },
-                                onAddPointClick = { viewModel.openAddDialogAtCurrentCenter() },
-                                onRecenter = { viewModel.recenter() },
-                                onRequestLiveLocation = { requestLiveLocation() },
-                                onPan = { dLat, dLng -> viewModel.pan(dLat, dLng) },
-                                onMapMoved = { lat, lng, zoom -> viewModel.updateMapCenter(lat, lng, zoom) },
-                                onZoomIn = { viewModel.zoomIn() },
-                                onZoomOut = { viewModel.zoomOut() },
-                                onZoomDelta = { viewModel.adjustZoom(it) },
+                        AppTab.ANALYSIS -> {
+                            UserAnalysisScreen(
+                                currentUser = user,
+                                allEntries = entries,
+                                onReportNewClick = {
+                                    viewModel.setTab(AppTab.MAP)
+                                    viewModel.openAddDialogAtCurrentCenter()
+                                },
+                                onViewMyPlacesClick = {
+                                    viewModel.setTab(AppTab.MY_PLACES)
+                                },
                                 modifier = Modifier.fillMaxSize()
                             )
+                        }
 
-                            // 2. Floating Google Maps Search Pill (with Profile button, no separate menu button)
-                            TopMangroveAppBar(
-                                searchQuery = uiState.searchQuery,
-                                onSearchQueryChange = { viewModel.setSearchQuery(it) },
-                                onProfileClick = {
-                                    coroutineScope.launch { drawerState.open() }
+                        AppTab.MY_PLACES -> {
+                            UserPlacesImpactScreen(
+                                currentUser = user,
+                                allEntries = entries,
+                                onSelectEntry = { entry -> viewModel.focusOnEntry(entry) },
+                                onDeleteEntry = { id -> viewModel.deleteEntry(id) },
+                                onReportNewClick = {
+                                    viewModel.setTab(AppTab.MAP)
+                                    viewModel.openAddDialogAtCurrentCenter()
                                 },
-                                onSearchSubmit = { viewModel.searchAndNavigate(context, it) },
-                                onSelectPlaceResult = { viewModel.selectPlaceSearchResult(it) },
-                                activeCategory = uiState.selectedCategory,
-                                onCategorySelected = { viewModel.setCategoryFilter(it) },
-                                modifier = Modifier.align(Alignment.TopCenter)
-                            )
-
-                            // 3. Floating Quick Action Button for Logging Observations directly on full map
-                            ExtendedFloatingActionButton(
-                                onClick = { viewModel.openAddDialogAtCurrentCenter() },
-                                icon = {
-                                    Icon(
-                                        imageVector = Icons.Default.AddLocation,
-                                        contentDescription = "Report Place"
-                                    )
-                                },
-                                text = { Text("Report Issue", fontWeight = FontWeight.Bold) },
-                                containerColor = MangroveTealPrimary,
-                                contentColor = Color.White,
-                                modifier = Modifier
-                                    .align(Alignment.BottomEnd)
-                                    .padding(end = 16.dp, bottom = innerPadding.calculateBottomPadding() + 16.dp)
-                                    .testTag("fab_report_issue_button")
+                                modifier = Modifier.fillMaxSize()
                             )
                         }
-                    }
 
-                    AppTab.ANALYSIS -> {
-                        UserAnalysisScreen(
-                            currentUser = user,
-                            allEntries = entries,
-                            onReportNewClick = {
-                                viewModel.setTab(AppTab.MAP)
-                                viewModel.openAddDialogAtCurrentCenter()
-                            },
-                            onViewMyPlacesClick = {
-                                viewModel.setTab(AppTab.MY_PLACES)
-                            },
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    }
-
-                    AppTab.MY_PLACES -> {
-                        UserPlacesImpactScreen(
-                            currentUser = user,
-                            allEntries = entries,
-                            onSelectEntry = { entry -> viewModel.focusOnEntry(entry) },
-                            onDeleteEntry = { id -> viewModel.deleteEntry(id) },
-                            onReportNewClick = {
-                                viewModel.setTab(AppTab.MAP)
-                                viewModel.openAddDialogAtCurrentCenter()
-                            },
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    }
-
-                    AppTab.ADMIN_PANEL -> {
-                        AdminDashboardScreen(
-                            entries = entries,
-                            users = allUsers,
-                            zones = viewModel.zones,
-                            stats = stats,
-                            onDeleteEntry = { id -> viewModel.deleteEntry(id) },
-                            onGrantAccess = { email, name, role, pass ->
-                                viewModel.grantAccessToEmail(email, name, role, pass)
-                            },
-                            onDeleteUser = { userId ->
-                                viewModel.deleteUser(userId)
-                            },
-                            onToggleUserActive = { userAccount ->
-                                viewModel.toggleUserActive(userAccount)
-                            },
-                            onNavigateToMap = { entry ->
-                                viewModel.focusOnEntry(entry)
-                            },
-                            modifier = Modifier.fillMaxSize()
-                        )
+                        AppTab.ADMIN_PANEL -> {
+                            AdminDashboardScreen(
+                                entries = entries,
+                                users = allUsers,
+                                zones = viewModel.zones,
+                                stats = stats,
+                                onDeleteEntry = { id -> viewModel.deleteEntry(id) },
+                                onGrantAccess = { email, name, role, pass ->
+                                    viewModel.grantAccessToEmail(email, name, role, pass)
+                                },
+                                onDeleteUser = { userId ->
+                                    viewModel.deleteUser(userId)
+                                },
+                                onToggleUserActive = { userAccount ->
+                                    viewModel.toggleUserActive(userAccount)
+                                },
+                                onNavigateToMap = { entry ->
+                                    viewModel.focusOnEntry(entry)
+                                },
+                                onOpenCloudSync = {
+                                    viewModel.openSyncDialog()
+                                },
+                                onSyncNow = {
+                                    viewModel.syncCloudData()
+                                },
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
                     }
                 }
             }
@@ -715,6 +784,13 @@ fun MainScreen(
             entry = entry,
             onDismiss = { viewModel.selectEntry(null) },
             onDelete = { id -> viewModel.deleteEntry(id) }
+        )
+    }
+
+    if (uiState.isSyncDialogOpen) {
+        SupabaseSyncDialog(
+            onDismiss = { viewModel.closeSyncDialog() },
+            onManualSyncTriggered = { viewModel.syncCloudData() }
         )
     }
 

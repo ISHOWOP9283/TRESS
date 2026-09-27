@@ -562,20 +562,14 @@ fun AddEntryDialog(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         items(attachedImages) { imagePath ->
-                            val imageModel = remember(imagePath) {
-                                if (imagePath.startsWith("/")) File(imagePath) else imagePath
-                            }
                             Box(
                                 modifier = Modifier
                                     .size(72.dp)
                                     .clip(RoundedCornerShape(10.dp))
                                     .border(2.dp, Color(0xFF10B981), RoundedCornerShape(10.dp))
                             ) {
-                                AsyncImage(
-                                    model = ImageRequest.Builder(context)
-                                        .data(imageModel)
-                                        .crossfade(true)
-                                        .build(),
+                                ObservationImageView(
+                                    imagePath = imagePath,
                                     contentDescription = "Captured photo",
                                     contentScale = ContentScale.Crop,
                                     modifier = Modifier.fillMaxSize()

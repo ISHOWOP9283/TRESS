@@ -48,8 +48,127 @@ object ImageStorageHelper {
     }
 
     /**
-     * Saves a captured Bitmap from camera to app's internal storage in high quality JPEG
+     * Encodes an image file to a compressed Base64 JPEG string for reliable cross-device persistence
      */
+    fun encodeImageToBase64(file: File, maxDimension: Int = 800, quality: Int = 75): String? {
+        return try {
+            if (!file.exists() || file.length() == 0L) return null
+
+            // 1. Decode bounds
+            val options = android.graphics.BitmapFactory.Options().apply {
+                inJustDecodeBounds = true
+            }
+            android.graphics.BitmapFactory.decodeFile(file.absolutePath, options)
+
+            // 2. Calculate sample size
+            var sampleSize = 1
+            var w = options.outWidth
+            var h = options.outHeight
+            while (w > maxDimension || h > maxDimension) {
+                sampleSize *= 2
+                w /= 2
+                h /= 2
+            }
+
+            // 3. Decode scaled bitmap
+            val decodeOptions = android.graphics.BitmapFactory.Options().apply {
+                inSampleSize = sampleSize
+            }
+            val bitmap = android.graphics.BitmapFactory.decodeFile(file.absolutePath, decodeOptions) ?: return null
+
+            val byteArrayOutputStream = java.io.ByteArrayOutputStream()
+            bitmap.compress(Bitmap.CompressFormat.JPEG, quality, byteArrayOutputStream)
+            val byteArray = byteArrayOutputStream.toByteArray()
+            android.util.Base64.encodeToString(byteArray, android.util.Base64.NO_WRAP)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
+        }
+    }
+
+    /**
+     * Resolves an image path (Base64 data URI, HTTP URL, local path, or URI) into an object Coil can load seamlessly
+     */
+    fun resolveImageModel(imagePath: String): Any {
+        val trimmed = imagePath.trim()
+        return when {
+            trimmed.startsWith("data:image/") || trimmed.contains(";base64,") -> {
+                try {
+                    val base64Data = if (trimmed.contains(",")) trimmed.substringAfter(",") else trimmed
+                    android.util.Base64.decode(base64Data, android.util.Base64.DEFAULT)
+                } catch (e: Exception) {
+                    trimmed
+                }
+            }
+            trimmed.startsWith("http://") || trimmed.startsWith("https://") -> {
+                trimmed
+            }
+            trimmed.startsWith("content://") -> {
+                Uri.parse(trimmed)
+            }
+            trimmed.startsWith("file://") -> {
+                File(trimmed.removePrefix("file://"))
+            }
+            trimmed.startsWith("/") -> {
+                File(trimmed)
+            }
+            // Check if it's raw base64 data (> 100 chars without / or :)
+            trimmed.length > 100 && !trimmed.contains("/") -> {
+                try {
+                    android.util.Base64.decode(trimmed, android.util.Base64.DEFAULT)
+                } catch (e: Exception) {
+                    trimmed
+                }
+            }
+            else -> trimmed
+        }
+    }
+
+    /**
+     * Loads a Bitmap from any image source (Base64, HTTP, local file, content URI)
+     */
+    fun loadBitmap(context: Context, imagePath: String, reqWidth: Int = 600, reqHeight: Int = 600): Bitmap? {
+        val trimmed = imagePath.trim()
+        return try {
+            when {
+                trimmed.startsWith("data:image/") || trimmed.contains(";base64,") -> {
+                    val base64Data = if (trimmed.contains(",")) trimmed.substringAfter(",") else trimmed
+                    val bytes = android.util.Base64.decode(base64Data, android.util.Base64.DEFAULT)
+                    android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                }
+                trimmed.startsWith("http://") || trimmed.startsWith("https://") -> {
+                    val url = java.net.URL(trimmed)
+                    val conn = url.openConnection() as java.net.HttpURLConnection
+                    conn.connectTimeout = 8000
+                    conn.readTimeout = 8000
+                    conn.inputStream.use { stream ->
+                        android.graphics.BitmapFactory.decodeStream(stream)
+                    }
+                }
+                trimmed.startsWith("content://") -> {
+                    context.contentResolver.openInputStream(Uri.parse(trimmed))?.use { stream ->
+                        android.graphics.BitmapFactory.decodeStream(stream)
+                    }
+                }
+                trimmed.startsWith("file://") -> {
+                    val file = File(trimmed.removePrefix("file://"))
+                    if (file.exists()) android.graphics.BitmapFactory.decodeFile(file.absolutePath) else null
+                }
+                trimmed.startsWith("/") -> {
+                    val file = File(trimmed)
+                    if (file.exists()) android.graphics.BitmapFactory.decodeFile(file.absolutePath) else null
+                }
+                trimmed.length > 100 && !trimmed.contains("/") -> {
+                    val bytes = android.util.Base64.decode(trimmed, android.util.Base64.DEFAULT)
+                    android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                }
+                else -> null
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
+        }
+    }
     fun saveBitmapToInternalStorage(context: Context, bitmap: Bitmap): String? {
         return try {
             val dir = getPhotosDirectory(context)

@@ -28,14 +28,14 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 /**
- * MapTree™ Official Logo Emblem ("MapTree - PROJECT TOMORROW").
+ * MapTree™ Official Logo Emblem ("Map Tree - PROTECT TOMORROW").
  * Exact replication of the new vector brand mark:
  * - 3D folded isometric perspective map base with roads and green terrain panels
  * - Central vibrant gradient Location Pin pointing into the map
  * - Upward blooming tree branches arching over the pin
  * - 5 lush gradient leaves (1 central top, 2 upper side, 2 lower side)
- * - Modern typography: "Map" (charcoal) + "Tree" (green) with leaf sprout on 'T'
- * - Subtitle: "— PROJECT TOMORROW —"
+ * - Modern typography: "Map" (charcoal) + "Tree" (green)
+ * - Subtitle: "— PROTECT TOMORROW —"
  */
 @Composable
 fun MapTreeLogoBadge(
@@ -63,8 +63,8 @@ fun MapTreeLogoBadge(
                 // Background clean white
                 drawCircle(color = Color.White, radius = w / 2f, center = center)
 
-                val scaleY = if (showText) 0.88f else 1.15f
-                val offsetY = if (showText) -h * 0.05f else 0f
+                val scaleY = if (showText) 0.74f else 1.15f
+                val offsetY = if (showText) -h * 0.085f else 0f
 
                 // ----------------------------------------------------
                 // 1. ISOMETRIC FOLDED MAP BASE
@@ -354,40 +354,40 @@ fun MapTreeLogoBadge(
 
 
                 // ----------------------------------------------------
-                // 5. BRAND TYPOGRAPHY: "MapTree" & "PROJECT TOMORROW"
+                // 5. BRAND TYPOGRAPHY: "Map Tree" & "PROTECT TOMORROW"
                 // ----------------------------------------------------
                 if (showText) {
                     val paintMap = Paint().apply {
-                        color = android.graphics.Color.parseColor("#1F2937") // Dark slate charcoal
-                        textSize = (w * 0.155f)
+                        color = android.graphics.Color.parseColor("#263238") // Dark slate charcoal
+                        textSize = (w * 0.140f)
                         isAntiAlias = true
                         typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
                         textAlign = Paint.Align.RIGHT
                     }
 
                     val paintTree = Paint().apply {
-                        color = android.graphics.Color.parseColor("#059669") // Rich emerald green
-                        textSize = (w * 0.155f)
+                        color = android.graphics.Color.parseColor("#0A8A42") // Rich emerald leaf green
+                        textSize = (w * 0.140f)
                         isAntiAlias = true
                         typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
                         textAlign = Paint.Align.LEFT
                     }
 
                     val paintSubtitle = Paint().apply {
-                        color = android.graphics.Color.parseColor("#1F2937")
-                        textSize = (w * 0.040f)
+                        color = android.graphics.Color.parseColor("#263238")
+                        textSize = (w * 0.033f)
                         isAntiAlias = true
-                        letterSpacing = 0.22f
+                        letterSpacing = 0.18f
                         typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
                         textAlign = Paint.Align.CENTER
                     }
 
-                    val textY = h * 0.81f
+                    val textY = h * 0.73f
 
                     // Draw "Map"
                     drawContext.canvas.nativeCanvas.drawText(
                         "Map",
-                        center.x - (w * 0.02f),
+                        center.x - (w * 0.015f),
                         textY,
                         paintMap
                     )
@@ -395,58 +395,37 @@ fun MapTreeLogoBadge(
                     // Draw "Tree"
                     drawContext.canvas.nativeCanvas.drawText(
                         "Tree",
-                        center.x,
+                        center.x + (w * 0.015f),
                         textY,
                         paintTree
                     )
 
-                    // Distinctive Twin Green Leaves sprouting on the 'T' of Tree
-                    val tSproutX = center.x + (w * 0.082f)
-                    val tSproutY = textY - (h * 0.115f)
-
-                    drawRotatedLeaf(
-                        center = Offset(tSproutX - (w * 0.015f), tSproutY + (h * 0.012f)),
-                        angle = -45f,
-                        length = h * 0.055f,
-                        width = w * 0.040f,
-                        colorStart = Color(0xFF76FF03),
-                        colorEnd = Color(0xFF2E7D32)
-                    )
-                    drawRotatedLeaf(
-                        center = Offset(tSproutX + (w * 0.022f), tSproutY - (h * 0.005f)),
-                        angle = 35f,
-                        length = h * 0.065f,
-                        width = w * 0.048f,
-                        colorStart = Color(0xFF4CAF50),
-                        colorEnd = Color(0xFF1B5E20)
-                    )
-
-                    // Subtitle: "— PROJECT TOMORROW —"
-                    val subY = h * 0.89f
+                    // Subtitle: "PROTECT TOMORROW" with letter tracking (100% visible inside the circle badge)
+                    val subY = h * 0.825f
                     drawContext.canvas.nativeCanvas.drawText(
-                        "PROJECT TOMORROW",
+                        "PROTECT TOMORROW",
                         center.x,
                         subY,
                         paintSubtitle
                     )
 
                     // Left & Right Green Accent Underline bars
-                    val lineStroke = 2.2f * (w / 200f)
-                    val subHalfWidth = w * 0.32f
-                    val barLen = w * 0.10f
+                    val lineStroke = 2.4f * (w / 200f)
+                    val subHalfWidth = w * 0.27f
+                    val barLen = w * 0.065f
 
                     drawLine(
-                        color = Color(0xFF059669),
-                        start = Offset(center.x - subHalfWidth - barLen, subY - (h * 0.012f)),
-                        end = Offset(center.x - subHalfWidth - (w * 0.02f), subY - (h * 0.012f)),
+                        color = Color(0xFF22C55E),
+                        start = Offset(center.x - subHalfWidth - barLen, subY - (h * 0.010f)),
+                        end = Offset(center.x - subHalfWidth - (w * 0.015f), subY - (h * 0.010f)),
                         strokeWidth = lineStroke,
                         cap = StrokeCap.Round
                     )
 
                     drawLine(
-                        color = Color(0xFF059669),
-                        start = Offset(center.x + subHalfWidth + (w * 0.02f), subY - (h * 0.012f)),
-                        end = Offset(center.x + subHalfWidth + barLen, subY - (h * 0.012f)),
+                        color = Color(0xFF22C55E),
+                        start = Offset(center.x + subHalfWidth + (w * 0.015f), subY - (h * 0.010f)),
+                        end = Offset(center.x + subHalfWidth + barLen, subY - (h * 0.010f)),
                         strokeWidth = lineStroke,
                         cap = StrokeCap.Round
                     )

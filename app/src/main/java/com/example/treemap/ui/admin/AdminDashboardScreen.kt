@@ -28,6 +28,9 @@ import androidx.compose.material.icons.filled.Assessment
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.CloudDone
+import androidx.compose.material.icons.filled.CloudOff
+import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Image
@@ -39,7 +42,9 @@ import androidx.compose.material.icons.filled.Park
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Visibility
@@ -66,10 +71,12 @@ import androidx.compose.material3.TabRowDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -90,10 +97,14 @@ import com.example.treemap.data.model.EntryStats
 import com.example.treemap.data.model.MangroveZone
 import com.example.treemap.data.model.TreeEntry
 import com.example.treemap.data.model.UserAccount
+import com.example.treemap.ui.components.ObservationImageView
 import com.example.treemap.ui.theme.MangroveDeepTeal
 import com.example.treemap.ui.theme.MangroveTealPrimary
 import com.example.treemap.ui.theme.StatusAtRisk
 import com.example.treemap.ui.theme.StatusFair
+import com.example.treemap.util.ImageStorageHelper
+import com.example.treemap.util.PdfReportGenerator
+import kotlinx.coroutines.launch
 import com.example.treemap.ui.theme.StatusThriving
 import java.io.File
 import java.text.SimpleDateFormat
@@ -112,8 +123,15 @@ fun AdminDashboardScreen(
     onDeleteUser: (Long) -> Unit,
     onToggleUserActive: (UserAccount) -> Unit,
     onNavigateToMap: (TreeEntry) -> Unit,
+    onOpenCloudSync: () -> Unit = {},
+    onSyncNow: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val isSupabaseConfigured = com.example.treemap.data.remote.SupabaseConfig.isConfigured(context)
+    val lastSyncTime = com.example.treemap.data.remote.SupabaseConfig.getLastSyncTime(context)
+    val syncFormat = remember { SimpleDateFormat("HH:mm, MMM dd", Locale.getDefault()) }
+
     var selectedTab by remember { mutableIntStateOf(0) }
     var searchQuery by remember { mutableStateOf("") }
     var selectedZoneFilter by remember { mutableStateOf<String?>(null) }
@@ -121,6 +139,10 @@ fun AdminDashboardScreen(
 
     var showGrantAccessDialog by remember { mutableStateOf(false) }
     var inspectedImageUri by remember { mutableStateOf<Pair<String, TreeEntry?>?>(null) }
+
+    LaunchedEffect(Unit) {
+        onSyncNow()
+    }
 
     val filteredEntries = remember(entries, searchQuery, selectedZoneFilter, selectedCategoryFilter) {
         entries.filter { entry ->
@@ -261,6 +283,97 @@ fun AdminDashboardScreen(
                                     AdminStatPill("Volunteers", "${users.size}", Color(0xFF64B5F6), Modifier.weight(1f))
                                     val totalImages = entries.sumOf { it.imageList.size }
                                     AdminStatPill("Photos Logged", "$totalImages", Color(0xFFFFB74D), Modifier.weight(1f))
+                                }
+
+                                Spacer(modifier = Modifier.height(10.dp))
+
+                                // Supabase Cloud Sync Quick Banner
+                                Surface(
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = Color.Black.copy(alpha = 0.25f),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .clickable { onOpenCloudSync() }
+                                        ) {
+                                            Icon(
+                                                imageVector = if (isSupabaseConfigured) Icons.Default.CloudDone else Icons.Default.CloudOff,
+                                                contentDescription = null,
+                                                tint = if (isSupabaseConfigured) Color(0xFF10B981) else Color(0xFFFFCC80),
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Column {
+                                                Text(
+                                                    text = if (isSupabaseConfigured) "Supabase Cloud Database" else "Local DB (Tap to Connect Cloud)",
+                                                    style = MaterialTheme.typography.labelSmall.copy(
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = Color.White
+                                                    )
+                                                )
+                                                Text(
+                                                    text = if (lastSyncTime > 0) "Auto-synced: ${syncFormat.format(Date(lastSyncTime))}" else if (isSupabaseConfigured) "Live Auto-Sync Active" else "Offline mode active",
+                                                    style = MaterialTheme.typography.bodySmall.copy(
+                                                        fontSize = 10.sp,
+                                                        color = Color.White.copy(alpha = 0.85f)
+                                                    )
+                                                )
+                                            }
+                                        }
+
+                                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                            Surface(
+                                                shape = RoundedCornerShape(6.dp),
+                                                color = Color(0xFF10B981),
+                                                modifier = Modifier.clickable { onSyncNow() }
+                                            ) {
+                                                Row(
+                                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.CloudSync,
+                                                        contentDescription = null,
+                                                        tint = Color.White,
+                                                        modifier = Modifier.size(14.dp)
+                                                    )
+                                                    Spacer(modifier = Modifier.width(4.dp))
+                                                    Text(
+                                                        text = "Sync",
+                                                        style = MaterialTheme.typography.labelSmall.copy(
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = Color.White
+                                                        )
+                                                    )
+                                                }
+                                            }
+
+                                            Surface(
+                                                shape = RoundedCornerShape(6.dp),
+                                                color = Color.White.copy(alpha = 0.2f),
+                                                modifier = Modifier.clickable { onOpenCloudSync() }
+                                            ) {
+                                                Text(
+                                                    text = "Config",
+                                                    style = MaterialTheme.typography.labelSmall.copy(
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = Color.White
+                                                    ),
+                                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                                )
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -762,25 +875,14 @@ private fun AdminDatabaseEntryCard(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     items(images) { imagePath ->
-                        val context = LocalContext.current
-                        val imageModel = remember(imagePath) {
-                            if (imagePath.startsWith("/")) {
-                                File(imagePath)
-                            } else {
-                                imagePath
-                            }
-                        }
                         Box(
                             modifier = Modifier
                                 .size(width = 110.dp, height = 80.dp)
                                 .clip(RoundedCornerShape(10.dp))
                                 .clickable { onImageClick(imagePath) }
                         ) {
-                            AsyncImage(
-                                model = ImageRequest.Builder(context)
-                                    .data(imageModel)
-                                    .crossfade(true)
-                                    .build(),
+                            ObservationImageView(
+                                imagePath = imagePath,
                                 contentDescription = "Observation photo",
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier.fillMaxSize()
@@ -822,18 +924,57 @@ private fun AdminDatabaseEntryCard(
                 )
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
-            // Action Buttons
+            // Action Buttons: PDF Export & Map View
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
+                val context = LocalContext.current
+                val coroutineScope = rememberCoroutineScope()
+                var isGeneratingPdf by remember { mutableStateOf(false) }
+
+                Button(
+                    onClick = {
+                        if (!isGeneratingPdf) {
+                            isGeneratingPdf = true
+                            coroutineScope.launch {
+                                PdfReportGenerator.generateAndShareReport(context, entry)
+                                isGeneratingPdf = false
+                            }
+                        }
+                    },
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MangroveTealPrimary
+                    ),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(36.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.PictureAsPdf,
+                        contentDescription = "Export PDF",
+                        modifier = Modifier.size(15.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = if (isGeneratingPdf) "Generating..." else "Export PDF",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
                 OutlinedButton(
                     onClick = onNavigateToMap,
                     shape = RoundedCornerShape(8.dp),
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                    modifier = Modifier.height(34.dp)
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(36.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Map,
@@ -1141,9 +1282,8 @@ private fun ImageInspectionDialog(
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
-    val imageModel = remember(imageUri) {
-        if (imageUri.startsWith("/")) File(imageUri) else imageUri
-    }
+    val coroutineScope = rememberCoroutineScope()
+    var isGeneratingPdf by remember { mutableStateOf(false) }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -1152,14 +1292,11 @@ private fun ImageInspectionDialog(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.92f))
+                .background(Color.Black.copy(alpha = 0.94f))
                 .clickable(onClick = onDismiss)
         ) {
-            AsyncImage(
-                model = ImageRequest.Builder(context)
-                    .data(imageModel)
-                    .crossfade(true)
-                    .build(),
+            ObservationImageView(
+                imagePath = imageUri,
                 contentDescription = "Full inspection photo",
                 contentScale = ContentScale.Fit,
                 modifier = Modifier
@@ -1167,25 +1304,67 @@ private fun ImageInspectionDialog(
                     .align(Alignment.Center)
             )
 
-            // Close button
-            IconButton(
-                onClick = onDismiss,
+            // Top action bar: Close + PDF export
+            Row(
                 modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(16.dp)
+                    .fillMaxWidth()
+                    .align(Alignment.TopCenter)
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    imageVector = Icons.Default.Close,
-                    contentDescription = "Close",
-                    tint = Color.White,
-                    modifier = Modifier.size(28.dp)
-                )
+                if (entry != null) {
+                    Button(
+                        onClick = {
+                            if (!isGeneratingPdf) {
+                                isGeneratingPdf = true
+                                coroutineScope.launch {
+                                    PdfReportGenerator.generateAndShareReport(context, entry)
+                                    isGeneratingPdf = false
+                                }
+                            }
+                        },
+                        shape = RoundedCornerShape(20.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MangroveTealPrimary
+                        ),
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.PictureAsPdf,
+                            contentDescription = "Export PDF",
+                            tint = Color.White,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = if (isGeneratingPdf) "Generating..." else "Export PDF Report",
+                            color = Color.White,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                } else {
+                    Spacer(modifier = Modifier.width(1.dp))
+                }
+
+                IconButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Close",
+                        tint = Color.White,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
             }
 
             // Bottom Coordinate and Species Banner
             if (entry != null) {
                 Surface(
-                    color = Color.Black.copy(alpha = 0.75f),
+                    color = Color.Black.copy(alpha = 0.8f),
                     modifier = Modifier
                         .fillMaxWidth()
                         .align(Alignment.BottomCenter)

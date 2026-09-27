@@ -332,19 +332,13 @@ private fun JournalItemCard(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     items(images) { imgPath ->
-                        val imageModel = remember(imgPath) {
-                            if (imgPath.startsWith("/")) File(imgPath) else imgPath
-                        }
                         Box(
                             modifier = Modifier
                                 .size(width = 80.dp, height = 56.dp)
                                 .clip(RoundedCornerShape(8.dp))
                         ) {
-                            AsyncImage(
-                                model = ImageRequest.Builder(context)
-                                    .data(imageModel)
-                                    .crossfade(true)
-                                    .build(),
+                            ObservationImageView(
+                                imagePath = imgPath,
                                 contentDescription = "Photo",
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier.fillMaxSize()
